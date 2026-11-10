@@ -1,0 +1,8 @@
+{$DOMAIN} {
+	encode zstd gzip
+	# The server sets HSTS and CSP itself; Caddy only terminates TLS and forwards.
+	reverse_proxy homecast:8080 {
+		# Large audio streams and long Range requests: don't buffer.
+		flush_interval -1
+	}
+}

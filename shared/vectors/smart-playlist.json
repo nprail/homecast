@@ -1,0 +1,69 @@
+{
+  "description": "Shared smart-playlist evaluator test vectors. Native (Swift/Kotlin) implementations must produce the same ids in the same order.",
+  "now": 1731200000000,
+  "episodes": [
+    { "id": "e1", "podcastId": "pod_1", "title": "Why Networks Congest", "releasedAt": 1731100000000, "durationSec": 3360, "status": "unplayed", "downloaded": true, "starred": false },
+    { "id": "e2", "podcastId": "pod_1", "title": "What a Router Remembers", "releasedAt": 1730000000000, "durationSec": 3120, "status": "played", "downloaded": false, "starred": true },
+    { "id": "e3", "podcastId": "pod_7", "title": "Tide Tables in Three Minutes", "releasedAt": 1731190000000, "durationSec": 180, "status": "inProgress", "downloaded": true, "starred": false },
+    { "id": "e4", "podcastId": "pod_7", "title": "Night Shift at the Water Plant", "releasedAt": 1731150000000, "durationSec": 2160, "status": "unplayed", "downloaded": false, "starred": true },
+    { "id": "e5", "podcastId": "pod_9", "title": "A Map of the Quiet Parts", "releasedAt": 1729000000000, "durationSec": 3840, "status": "unplayed", "downloaded": false, "starred": false },
+    { "id": "e6", "podcastId": "pod_9", "title": "ham radio for the impatient", "releasedAt": 1731199000000, "durationSec": 2460, "status": "unplayed", "downloaded": true, "starred": false }
+  ],
+  "cases": [
+    {
+      "name": "spec example: fresh news",
+      "definition": { "name": "Fresh news", "match": "all", "rules": [
+        { "field": "podcast", "op": "in", "value": ["pod_1", "pod_7"] },
+        { "field": "status", "op": "is", "value": "unplayed" },
+        { "field": "releasedWithin", "op": "days", "value": 7 }
+      ], "sort": { "field": "releasedAt", "dir": "desc" }, "limit": 50 },
+      "expected": ["e4", "e1"]
+    },
+    {
+      "name": "any: starred or downloaded, sorted by title asc",
+      "definition": { "name": "x", "match": "any", "rules": [
+        { "field": "starred", "op": "is", "value": true },
+        { "field": "downloaded", "op": "is", "value": true }
+      ], "sort": { "field": "title", "dir": "asc" } },
+      "expected": ["e6", "e4", "e3", "e2", "e1"]
+    },
+    {
+      "name": "duration lt 10 minutes",
+      "definition": { "name": "x", "match": "all", "rules": [{ "field": "duration", "op": "lt", "value": 10 }], "sort": { "field": "duration", "dir": "asc" } },
+      "expected": ["e3"]
+    },
+    {
+      "name": "duration gt 50 minutes",
+      "definition": { "name": "x", "match": "all", "rules": [{ "field": "duration", "op": "gt", "value": 50 }], "sort": { "field": "duration", "dir": "desc" } },
+      "expected": ["e5", "e1", "e2"]
+    },
+    {
+      "name": "podcast notIn",
+      "definition": { "name": "x", "match": "all", "rules": [{ "field": "podcast", "op": "notIn", "value": ["pod_1", "pod_7"] }], "sort": { "field": "releasedAt", "dir": "asc" } },
+      "expected": ["e5", "e6"]
+    },
+    {
+      "name": "title contains is case-insensitive",
+      "definition": { "name": "x", "match": "all", "rules": [{ "field": "title", "op": "contains", "value": "HAM" }], "sort": { "field": "title", "dir": "asc" } },
+      "expected": ["e6"]
+    },
+    {
+      "name": "limit is applied after sort",
+      "definition": { "name": "x", "match": "all", "rules": [], "sort": { "field": "releasedAt", "dir": "desc" }, "limit": 2 },
+      "expected": ["e6", "e3"]
+    },
+    {
+      "name": "in progress and not downloaded yields nothing",
+      "definition": { "name": "x", "match": "all", "rules": [
+        { "field": "status", "op": "is", "value": "inProgress" },
+        { "field": "downloaded", "op": "is", "value": false }
+      ], "sort": { "field": "title", "dir": "asc" } },
+      "expected": []
+    },
+    {
+      "name": "releasedWithin 14 days",
+      "definition": { "name": "x", "match": "all", "rules": [{ "field": "releasedWithin", "op": "days", "value": 14 }], "sort": { "field": "releasedAt", "dir": "asc" } },
+      "expected": ["e2", "e1", "e4", "e3", "e6"]
+    }
+  ]
+}

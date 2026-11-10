@@ -1,0 +1,140 @@
+{
+  "title": "Homecast",
+  "url": "https://nprail.github.io/homecast/",
+  "src": "docs",
+  "out": "site",
+  "engine": "js",
+  "logo": {
+    "light": "/assets/images/homecast-mark-light.svg",
+    "dark": "/assets/images/homecast-mark.svg",
+    "alt": "Homecast"
+  },
+  "favicon": "/assets/images/favicon.svg",
+  "layout": {
+    "spa": true,
+    "header": {
+      "enabled": true
+    },
+    "sidebar": {
+      "collapsible": true,
+      "defaultCollapsed": false
+    },
+    "optionsMenu": {
+      "position": "sidebar-top",
+      "components": {
+        "search": true,
+        "themeSwitch": true
+      }
+    },
+    "footer": {
+      "style": "minimal",
+      "content": "Homecast. A self-hosted podcast player and sync server.",
+      "branding": false
+    }
+  },
+  "theme": {
+    "name": "default",
+    "appearance": "system",
+    "codeHighlight": true
+  },
+  "minify": true,
+  "autoTitleFromH1": true,
+  "copyCode": true,
+  "pageNavigation": true,
+  "navigation": [
+    {
+      "title": "Overview",
+      "path": "/",
+      "icon": "house"
+    },
+    {
+      "title": "Getting started",
+      "icon": "rocket",
+      "collapsible": false,
+      "children": [
+        {
+          "title": "Quick start",
+          "path": "/getting-started/quick-start"
+        },
+        {
+          "title": "Deployment",
+          "path": "/getting-started/deployment"
+        },
+        {
+          "title": "Configuration",
+          "path": "/getting-started/configuration"
+        }
+      ]
+    },
+    {
+      "title": "Guides",
+      "icon": "book-open",
+      "collapsible": false,
+      "children": [
+        {
+          "title": "Using the player",
+          "path": "/guides/player"
+        },
+        {
+          "title": "Admin dashboard",
+          "path": "/guides/admin"
+        },
+        {
+          "title": "Transcripts",
+          "path": "/guides/transcripts"
+        },
+        {
+          "title": "Security",
+          "path": "/guides/security"
+        }
+      ]
+    },
+    {
+      "title": "Reference",
+      "icon": "library",
+      "collapsible": false,
+      "children": [
+        {
+          "title": "Architecture",
+          "path": "/reference/architecture"
+        },
+        {
+          "title": "REST API",
+          "path": "/reference/api"
+        },
+        {
+          "title": "Sync protocol",
+          "path": "/reference/sync"
+        },
+        {
+          "title": "Smart playlists",
+          "path": "/reference/smart-playlists"
+        },
+        {
+          "title": "Development",
+          "path": "/reference/development"
+        },
+        {
+          "title": "Specification",
+          "path": "/reference/spec"
+        }
+      ]
+    },
+    {
+      "title": "GitHub",
+      "path": "https://github.com/nprail/homecast",
+      "icon": "github",
+      "external": true
+    }
+  ],
+  "plugins": {
+    "git": {
+      "commitHistory": true,
+      "maxCommits": 5
+    },
+    "seo": {
+      "defaultDescription": "Homecast: a self-hosted podcast player with a sync server, admin dashboard and offline-first PWA."
+    },
+    "ai": false
+  }
+}

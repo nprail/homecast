@@ -1,0 +1,100 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/space-grotesk';
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter Variable', Inter, system-ui, sans-serif;
+  --font-display: 'Space Grotesk Variable', 'Space Grotesk', Inter, sans-serif;
+  --color-page: #f4f5f7;
+  --color-ink: #14171c;
+  --color-ink-2: #3f4754;
+  --color-muted: #5b6472;
+  --color-line: #e3e6eb;
+  --color-line-2: #eef0f3;
+  --color-line-input: #cbd0d8;
+  --color-brand: #0f766e;
+  --color-brand-dark: #0b5f58;
+  --color-brand-soft: #e6f2f1;
+  --color-brand-chip: #e0f2f1;
+  --color-row-hover: #f7faf9;
+  --color-ok-bg: #dcfce7;
+  --color-ok-fg: #166534;
+  --color-bad-bg: #fee2e2;
+  --color-bad-fg: #991b1b;
+  --color-warn-bg: #fef3c7;
+  --color-warn-fg: #92400e;
+  --color-neutral-bg: #eef0f3;
+  --color-off-bg: #e3e6eb;
+  --color-chart-audio: #2a78d6;
+  --color-chart-transcribe: #eb6834;
+  --color-chart-grid: #e1e0d9;
+  --color-chart-axis: #c3c2b7;
+
+  /* Player (dark) */
+  --color-p-bg: #0e1014;
+  --color-p-side: #12151b;
+  --color-p-surface: #171a21;
+  --color-p-raised: #1f232c;
+  --color-p-line: #2a2f3a;
+  --color-p-text: #f1f3f7;
+  --color-p-muted: #a3abba;
+  --color-p-accent: #4fd1c5;
+  --color-p-ink: #04201d;
+  --color-p-accent-soft: #12302f;
+  --color-p-amber: #f5b544;
+  --color-p-amber-soft: #3a2c10;
+  --color-p-grip: #4a5160;
+  --color-p-danger: #f08a8a;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+.sr-only-cell {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* Admin tables become stacked cards on small screens (labels come from data-label). */
+@media (max-width: 767px) {
+  .stack-table,
+  .stack-table tbody { display: block; width: 100%; }
+  .stack-table thead { display: none; }
+  .stack-table tr { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--color-line-2); }
+  .stack-table td { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 !important; text-align: right; min-width: 0; }
+  .stack-table td:first-child,
+  .stack-table td[data-block] { display: block; text-align: left; }
+  .stack-table td[data-label]::before { content: attr(data-label); flex-shrink: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-muted); text-align: left; }
+  .stack-table td[data-hide-mobile] { display: none; }
+  .stack-table td[data-actions] { justify-content: flex-end; }
+  .stack-table td[data-corner] { position: absolute; top: 6px; right: 8px; }
+  .stack-table tr:has(td[data-corner]) td:first-child { padding-right: 48px !important; }
+  .stack-table td[colspan] { display: block; text-align: center; }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "Homecast",
+  "short_name": "Homecast",
+  "description": "A podcast player with a self-hosted sync server. Works offline.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0E1014",
+  "theme_color": "#0E1014",
+  "categories": ["music", "entertainment"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Up Next", "url": "/queue", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Bookmarks", "url": "/bookmarks", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

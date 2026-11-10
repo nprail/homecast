@@ -1,0 +1,34 @@
+{
+  "name": "homecast",
+  "private": true,
+  "version": "1.0.0",
+  "license": "MIT",
+  "author": "Noah Prail",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/nprail/homecast.git"
+  },
+  "description": "Homecast: self-hosted sync server and admin dashboard",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
+    "build": "npm run build -w web && npm run build -w server",
+    "start": "npm run start -w server",
+    "test": "npm test -w shared && npm test -w server",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w server && npm run typecheck -w web",
+    "audit": "npm audit --audit-level=high",
+    "docs:dev": "docmd dev",
+    "docs:build": "docmd build"
+  },
+  "devDependencies": {
+    "@docmd/core": "0.9.9"
+  }
+}

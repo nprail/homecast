@@ -1,0 +1,39 @@
+# Homecast behind Caddy (automatic HTTPS).
+#   1. Copy deploy/.env.example to deploy/.env and set DOMAIN.
+#   2. docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+#   3. docker compose -f deploy/docker-compose.yml logs homecast   # find the bootstrap token
+services:
+  homecast:
+    build: { context: .., dockerfile: Dockerfile }
+    restart: unless-stopped
+    environment:
+      PUBLIC_URL: https://${DOMAIN}
+      # Trust X-Forwarded-* only from private-network peers (the Caddy container).
+      TRUST_PROXY: uniquelocal
+      # JWT_SECRET is generated on first run and stored in the data volume; set it here to override (32+ chars).
+      # WHISPER_MODEL: small.en-q5_1
+    volumes:
+      - homecast-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    expose: ["8080"]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [homecast]
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  homecast-data:
+  caddy-data:
+  caddy-config:
