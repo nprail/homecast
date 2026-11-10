@@ -1,10 +1,13 @@
-# Homecast behind Caddy (automatic HTTPS).
+# Homecast behind Caddy (automatic HTTPS). Uses the published image from GHCR.
 #   1. Copy deploy/.env.example to deploy/.env and set DOMAIN.
-#   2. docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+#   2. docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 #   3. docker compose -f deploy/docker-compose.yml logs homecast   # find the bootstrap token
+#
+# Pin a version with HOMECAST_TAG in deploy/.env (for example 1.2.0). The default is latest.
+# To build from source instead, use docker-compose.dev.yml (see the documentation).
 services:
   homecast:
-    build: { context: .., dockerfile: Dockerfile }
+    image: ghcr.io/nprail/homecast:${HOMECAST_TAG:-latest}
     restart: unless-stopped
     environment:
       PUBLIC_URL: https://${DOMAIN}

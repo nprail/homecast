@@ -1,6 +1,6 @@
 ---
 title: "Deployment"
-description: "Run Homecast behind Caddy with Docker."
+description: "Run Homecast behind Caddy with the published Docker image."
 ---
 
 # Deployment
@@ -9,28 +9,40 @@ Homecast listens on plain HTTP and expects a TLS-terminating reverse proxy in fr
 
 ## Docker Compose
 
+The Compose file runs the published image `ghcr.io/nprail/homecast`, so there is nothing to build:
+
 ```bash
 cp deploy/.env.example deploy/.env       # set DOMAIN=podcasts.example.com
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 docker compose -f deploy/docker-compose.yml logs homecast   # find the bootstrap token
 ```
+
+To pin a version, set `HOMECAST_TAG` in `deploy/.env` (for example `HOMECAST_TAG=1.2.0`). Upgrading is `docker compose ... pull && docker compose ... up -d`.
 
 The image:
 
 - runs as a **non-root** user with a **read-only root filesystem** (only `/data` is writable);
-- bundles `ffmpeg` and `whisper.cpp` with the `base.en-q5_1` model, so transcripts work out of the box;
+- bundles `ffmpeg` and `whisper.cpp` (the prebuilt release binary for its architecture, checksum-verified at build time) with the `base.en-q5_1` model, so transcripts work out of the box;
 - contains **no secrets**: the JWT secret is generated on first run and stored in the data volume.
 
-## Prebuilt images
+## Published images
 
-A GitHub Actions workflow publishes images to the GitHub Container Registry:
+A GitHub Actions workflow publishes the image to the GitHub Container Registry:
 
 | Event | Tags |
 |---|---|
 | push to `main` | `ghcr.io/nprail/homecast:main` |
 | push of a git tag `vX.Y.Z` | `ghcr.io/nprail/homecast:X.Y.Z` and `:latest` |
 
-Images are built for `linux/amd64` and `linux/arm64`.
+Images are built for **`linux/amd64`** and **`linux/arm64`**, so they run on x86 servers and on ARM machines such as Raspberry Pi 4/5 (64-bit OS) and Apple Silicon. Docker picks the right one automatically.
+
+::: callout tip "Building from source"
+For development, build the image from your checkout instead of pulling it:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml --env-file deploy/.env up -d --build
+```
+:::
 
 ## Behind a reverse proxy
 
