@@ -42,7 +42,7 @@ Invite-only registration, argon2id, instantly revocable sessions, refresh-token 
 shared/   zod schemas for the API and sync protocol, smart-playlist evaluator + test vectors
 server/   Fastify + LokiJS server (repository layer in src/db, services/, routes/)
 web/      React 19 + Vite + Tailwind v4: the player PWA and the admin dashboard
-deploy/   docker-compose (published image), docker-compose.dev.yml (build from source), Caddyfile
+deploy/   docker-compose.yml (plain HTTP), docker-compose.caddy.yml (HTTPS with Caddy), docker-compose.dev.yml (build from source)
 logo/     Homecast logo sources
 docs/     this documentation (docmd)
 ```

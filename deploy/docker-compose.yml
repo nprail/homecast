@@ -1,18 +1,18 @@
-# Homecast behind Caddy (automatic HTTPS). Uses the published image from GHCR.
-#   1. Copy deploy/.env.example to deploy/.env and set DOMAIN.
-#   2. docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
-#   3. docker compose -f deploy/docker-compose.yml logs homecast   # find the bootstrap token
+# Homecast on its own, served over plain HTTP on port 8080.
+# Good for a LAN or a machine behind your own reverse proxy. For automatic HTTPS with Caddy, use
+# docker-compose.caddy.yml instead.
 #
-# Pin a version with HOMECAST_TAG in deploy/.env (for example 1.2.0). The default is latest.
-# To build from source instead, use docker-compose.dev.yml (see the documentation).
+#   docker compose -f deploy/docker-compose.yml up -d
+#   docker compose -f deploy/docker-compose.yml logs homecast   # find the bootstrap token
+#
+# Optional settings go in deploy/.env (see .env.example): HOMECAST_TAG, PUBLIC_URL.
 services:
   homecast:
     image: ghcr.io/nprail/homecast:${HOMECAST_TAG:-latest}
     restart: unless-stopped
+    ports: ["8080:8080"]
     environment:
-      PUBLIC_URL: https://${DOMAIN}
-      # Trust X-Forwarded-* only from private-network peers (the Caddy container).
-      TRUST_PROXY: uniquelocal
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
       # JWT_SECRET is generated on first run and stored in the data volume; set it here to override (32+ chars).
       # WHISPER_MODEL: small.en-q5_1
     volumes:
@@ -22,21 +22,6 @@ services:
       - /tmp
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    expose: ["8080"]
-
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    depends_on: [homecast]
-    ports: ["80:80", "443:443", "443:443/udp"]
-    environment:
-      DOMAIN: ${DOMAIN}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
 
 volumes:
   homecast-data:
-  caddy-data:
-  caddy-config:

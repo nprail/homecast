@@ -1,5 +1,7 @@
 # Development override: build the image from this checkout instead of pulling it from GHCR.
-#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml --env-file deploy/.env up -d --build
+# Works with either compose file:
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up -d --build
+#   docker compose -f deploy/docker-compose.caddy.yml -f deploy/docker-compose.dev.yml --env-file deploy/.env up -d --build
 services:
   homecast:
     image: homecast:dev

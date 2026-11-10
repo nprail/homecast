@@ -5,21 +5,36 @@ description: "Run Homecast behind Caddy with the published Docker image."
 
 # Deployment
 
-Homecast listens on plain HTTP and expects a TLS-terminating reverse proxy in front of it. The repository ships a Docker image and a Compose file with [Caddy](https://caddyserver.com), which gets certificates automatically.
+Homecast runs as one container that serves HTTP on port 8080. Use the plain setup for a LAN or your own reverse proxy, and the Caddy setup when you want automatic HTTPS on a public domain.
 
-## Docker Compose
+## Docker Compose (plain HTTP)
 
-The Compose file runs the published image `ghcr.io/nprail/homecast`, so there is nothing to build:
+The default Compose file runs the published image `ghcr.io/nprail/homecast`, so there is nothing to build:
 
 ```bash
-cp deploy/.env.example deploy/.env       # set DOMAIN=podcasts.example.com
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+docker compose -f deploy/docker-compose.yml up -d
 docker compose -f deploy/docker-compose.yml logs homecast   # find the bootstrap token
 ```
 
-To pin a version, set `HOMECAST_TAG` in `deploy/.env` (for example `HOMECAST_TAG=1.2.0`). Upgrading is `docker compose ... pull && docker compose ... up -d`.
+Open `http://<host>:8080`. To set the address the server advertises (used in links and cookies), set `PUBLIC_URL` in `deploy/.env`, for example `PUBLIC_URL=http://192.168.1.10:8080`.
 
-The image:
+To pin a version, set `HOMECAST_TAG` in `deploy/.env` (for example `HOMECAST_TAG=1.2.0`). Upgrading is `docker compose -f deploy/docker-compose.yml pull && docker compose -f deploy/docker-compose.yml up -d`.
+
+## Docker Compose with Caddy (HTTPS)
+
+`deploy/docker-compose.caddy.yml` adds [Caddy](https://caddyserver.com), which obtains and renews certificates automatically. Caddy is the only thing exposed to the network; Homecast is reachable only through it.
+
+Before you start, point a DNS name at the host and open ports 80 and 443 to it.
+
+```bash
+cp deploy/.env.example deploy/.env       # set DOMAIN=podcasts.example.com
+docker compose -f deploy/docker-compose.caddy.yml --env-file deploy/.env up -d
+docker compose -f deploy/docker-compose.caddy.yml --env-file deploy/.env logs homecast
+```
+
+The Caddy configuration is `deploy/Caddyfile`. It sets `TRUST_PROXY` for Homecast so it trusts forwarded headers only from Caddy.
+
+The image, in both setups:
 
 - runs as a **non-root** user with a **read-only root filesystem** (only `/data` is writable);
 - bundles `ffmpeg` and `whisper.cpp` (the prebuilt release binary for its architecture, checksum-verified at build time) with the `base.en-q5_1` model, so transcripts work out of the box;
@@ -37,16 +52,17 @@ A GitHub Actions workflow publishes the image to the GitHub Container Registry:
 Images are built for **`linux/amd64`** and **`linux/arm64`**, so they run on x86 servers and on ARM machines such as Raspberry Pi 4/5 (64-bit OS) and Apple Silicon. Docker picks the right one automatically.
 
 ::: callout tip "Building from source"
-For development, build the image from your checkout instead of pulling it:
+For development, build the image from your checkout instead of pulling it. The dev override works with either file:
 
 ```bash
-docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml --env-file deploy/.env up -d --build
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up -d --build
+docker compose -f deploy/docker-compose.caddy.yml -f deploy/docker-compose.dev.yml --env-file deploy/.env up -d --build
 ```
 :::
 
-## Behind a reverse proxy
+## Behind your own reverse proxy
 
-Set `PUBLIC_URL` to the public HTTPS address and `TRUST_PROXY` to the proxy's address so the server trusts `X-Forwarded-*` only from it. In the Compose file this is `uniquelocal`, which matches the private Docker network.
+If you already run a proxy, use the plain Compose file and point your proxy at port 8080. Set `PUBLIC_URL` to the public HTTPS address and `TRUST_PROXY` to the proxy's address so the server trusts `X-Forwarded-*` only from it. The Caddy file sets `TRUST_PROXY=uniquelocal` for its private Docker network.
 
 ::: callout warning "HTTPS matters for the web app"
 Offline downloads, the service worker and "install as app" require a secure context (HTTPS or `localhost`). Over plain `http://` on a LAN address the player still works, but without those features.

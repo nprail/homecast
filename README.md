@@ -42,17 +42,23 @@ DATA_DIR=/var/lib/homecast PUBLIC_URL=https://podcasts.example.com TRUST_PROXY=l
 
 The server serves the dashboard itself from `web/dist` (`WEB_DIR`).
 
-### Docker + Caddy
+### Docker
 
-The Compose file runs the published image `ghcr.io/nprail/homecast` (linux/amd64 and linux/arm64):
+The default Compose file runs the published image `ghcr.io/nprail/homecast` (linux/amd64 and linux/arm64) on plain HTTP, port 8080:
 
 ```bash
-cp deploy/.env.example deploy/.env   # set DOMAIN (and optionally HOMECAST_TAG)
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+docker compose -f deploy/docker-compose.yml up -d
 docker compose -f deploy/docker-compose.yml logs homecast    # bootstrap token
 ```
 
-To build from source for development, add the dev override: `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml --env-file deploy/.env up -d --build`.
+For HTTPS with automatic certificates, use the Caddy file (set `DOMAIN` in `deploy/.env` first):
+
+```bash
+cp deploy/.env.example deploy/.env
+docker compose -f deploy/docker-compose.caddy.yml --env-file deploy/.env up -d
+```
+
+To build from source for development, add the dev override: `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up -d --build`.
 
 The image runs as a non-root user with a read-only root filesystem (only `/data` is writable), bundles ffmpeg and the prebuilt whisper.cpp binary (per architecture) with the `base.en-q5_1` model, and contains no secrets: the JWT secret is generated on first run into the data volume.
 
@@ -83,7 +89,7 @@ The docs live in `docs/` and are built with [docmd](https://docmd.io): `npm run 
 shared/   zod schemas for the API and sync protocol, smart-playlist evaluator + vectors/
 server/   Fastify + LokiJS (src/db is the thin repository layer), services/, routes/
 web/      React 19 + Vite + Tailwind v4 admin dashboard
-deploy/   docker-compose (published image), docker-compose.dev.yml (build from source), Caddyfile
+deploy/   docker-compose.yml (plain HTTP), docker-compose.caddy.yml (HTTPS with Caddy), docker-compose.dev.yml (build from source)
 logo/     Homecast logo sources (the PWA icons are rendered from logo/homecast-app-icon.svg by web/scripts/make-icons.mjs)
 docs/     documentation source (docmd.config.json at the repo root)
 ```
