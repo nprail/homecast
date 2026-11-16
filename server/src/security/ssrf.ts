@@ -70,6 +70,13 @@ export function isBlockedAddress(ip: string): boolean {
   return true;
 }
 
+let defaultMaxRedirects = 10;
+
+/** Process-wide default for how many redirects outbound fetches follow (set from config at startup). */
+export function setDefaultMaxRedirects(n: number): void {
+  defaultMaxRedirects = n;
+}
+
 export interface FetchOptions {
   method?: 'GET' | 'HEAD';
   headers?: Record<string, string>;
@@ -139,7 +146,7 @@ export function parseSafeUrl(raw: string, allowPrivate = false): URL {
 /** Make a request following redirects manually (each hop re-validated). */
 export async function safeRequest(rawUrl: string, opts: FetchOptions = {}): Promise<SafeResponse> {
   const timeoutMs = opts.timeoutMs ?? 30_000;
-  const maxRedirects = opts.maxRedirects ?? 5;
+  const maxRedirects = opts.maxRedirects ?? defaultMaxRedirects;
   const allowPrivate = opts.allowPrivate ?? false;
   const agent = makeAgent(allowPrivate, timeoutMs);
   const close = () => agent.close().catch(() => undefined);
@@ -167,7 +174,7 @@ export async function safeRequest(rawUrl: string, opts: FetchOptions = {}): Prom
         const loc = res.headers.location;
         discardBody(res.body);
         if (!loc || typeof loc !== 'string') throw new SsrfError('Redirect without location');
-        if (hop === maxRedirects) throw new SsrfError('Too many redirects');
+        if (hop === maxRedirects) throw new SsrfError(`Too many redirects (stopped at ${url.host})`);
         const next = parseSafeUrl(new URL(loc, url).toString(), allowPrivate);
         if (next.origin !== url.origin) auth = undefined;
         url = next;
@@ -175,7 +182,7 @@ export async function safeRequest(rawUrl: string, opts: FetchOptions = {}): Prom
       }
       return { status: res.statusCode, headers: res.headers, body: res.body, finalUrl: url.toString(), close };
     }
-    throw new SsrfError('Too many redirects');
+    throw new SsrfError(`Too many redirects (stopped at ${url.host})`);
   } catch (e) {
     await close();
     throw e;

@@ -21,9 +21,18 @@ export interface Config {
   version: string;
   /** Test/dev only: allow fetching private network addresses. Never enable in production. */
   allowPrivateNetworks: boolean;
+  /** Redirects followed when fetching feeds and audio (each hop is re-validated). */
+  maxRedirects: number;
   logLevel: string;
   maxEpisodesPerFeed: number;
   startWorkers: boolean;
+}
+
+function parseMaxRedirects(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === '') return 10;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0 || n > 30) throw new Error('MAX_REDIRECTS must be an integer from 0 to 30');
+  return n;
 }
 
 export const VERSION = '1.0.0';
@@ -72,6 +81,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
     webDir: existsSync(webDirEnv) ? webDirEnv : null,
     version: VERSION,
     allowPrivateNetworks: env.ALLOW_PRIVATE_NETWORKS === 'true',
+    maxRedirects: parseMaxRedirects(env.MAX_REDIRECTS),
     logLevel: env.LOG_LEVEL ?? 'info',
     maxEpisodesPerFeed: Number(env.MAX_EPISODES_PER_FEED ?? 5000),
     startWorkers: env.DISABLE_WORKERS !== 'true',

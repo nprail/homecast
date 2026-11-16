@@ -23,6 +23,7 @@ description: "Environment variables and runtime settings."
 | `MAX_EPISODES_PER_FEED` | `5000` | newest episodes kept per feed |
 | `LOG_LEVEL` | `info` | |
 | `DISABLE_WORKERS` | unset | `true` disables the feed poller, transcript queue and maintenance |
+| `MAX_REDIRECTS` | `10` | Redirects followed when fetching feeds, audio and transcripts (0 to 30). Each hop is re-checked by the SSRF guard. Raise it if downloads fail with "Too many redirects" |
 | `ALLOW_PRIVATE_NETWORKS` | `false` | **tests and development only**: disables the SSRF guard's address blocking |
 
 ## Settings in the dashboard

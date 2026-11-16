@@ -77,6 +77,7 @@ The image runs as a non-root user with a read-only root filesystem (only `/data`
 | `WEB_DIR` | `../web/dist` | Static dashboard |
 | `MAX_EPISODES_PER_FEED` | `5000` | |
 | `ALLOW_PRIVATE_NETWORKS` | `false` | Tests/dev only: disables the SSRF guard's address blocking |
+| `MAX_REDIRECTS` | `10` | Redirects followed for feeds/audio (0 to 30); each hop is re-validated |
 | `LOG_LEVEL` | `info` | |
 
 ## Documentation

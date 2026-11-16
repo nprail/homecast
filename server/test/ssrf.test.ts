@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { isBlockedAddress, parseSafeUrl, safeFetchBuffer, safeRequest, SsrfError } from '../src/security/ssrf.js';
+import { isBlockedAddress, parseSafeUrl, safeFetchBuffer, safeRequest, setDefaultMaxRedirects, SsrfError } from '../src/security/ssrf.js';
+import { loadConfig } from '../src/config.js';
 import { fakeOrigin } from './helpers.js';
 
 describe('isBlockedAddress', () => {
@@ -42,11 +43,36 @@ describe('safeRequest', () => {
     await new Promise((r) => setTimeout(r, 50)); // an unhandled stream error would fail the run here
     await o.close();
   });
+  it('honors the configured redirect limit', async () => {
+    const routes: Record<string, { type: string; body: string; location?: string }> = { '/h7': { type: 'text/plain', body: 'done' } };
+    for (let i = 0; i < 7; i++) routes[`/h${i}`] = { type: 'text/plain', body: '', location: `/h${i + 1}` };
+    const o = await fakeOrigin(routes);
+    try {
+      setDefaultMaxRedirects(3);
+      await expect(safeFetchBuffer(`${o.url}/h0`, { maxBytes: 100, allowPrivate: true })).rejects.toThrow(/Too many redirects/);
+      setDefaultMaxRedirects(7);
+      expect((await safeFetchBuffer(`${o.url}/h0`, { maxBytes: 100, allowPrivate: true })).body.toString()).toBe('done');
+    } finally {
+      setDefaultMaxRedirects(10);
+      await o.close();
+    }
+  });
   it('enforces size caps and follows redirects only through validation', async () => {
     const o = await fakeOrigin({ '/big': { type: 'text/plain', body: 'x'.repeat(2000) } });
     await expect(safeFetchBuffer(`${o.url}/big`, { maxBytes: 100, allowPrivate: true })).rejects.toThrow(/larger/);
     const ok = await safeFetchBuffer(`${o.url}/big`, { maxBytes: 5000, allowPrivate: true });
     expect(ok.bytes).toBe(2000);
     await o.close();
+  });
+});
+
+describe('MAX_REDIRECTS config', () => {
+  const dir = process.env.TMPDIR ?? '/tmp';
+  it('defaults to 10, accepts 0 to 30, rejects anything else', () => {
+    const base = { DATA_DIR: dir, PUBLIC_URL: 'http://localhost:8080', JWT_SECRET: 'x'.repeat(40) };
+    expect(loadConfig({ ...base }).maxRedirects).toBe(10);
+    expect(loadConfig({ ...base, MAX_REDIRECTS: '3' }).maxRedirects).toBe(3);
+    expect(loadConfig({ ...base, MAX_REDIRECTS: '0' }).maxRedirects).toBe(0);
+    for (const bad of ['31', '-1', '2.5', 'abc']) expect(() => loadConfig({ ...base, MAX_REDIRECTS: bad })).toThrow(/MAX_REDIRECTS/);
   });
 });

@@ -29,6 +29,7 @@ import { proxyRoutes } from './routes/proxy.js';
 import { syncRoutes } from './routes/sync.js';
 import { transcriptRoutes } from './routes/transcripts.js';
 import { HttpError } from './util/errors.js';
+import { setDefaultMaxRedirects } from './security/ssrf.js';
 
 export interface App {
   app: FastifyInstance;
@@ -48,6 +49,7 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
     bodyLimit: 1024 * 1024,
   });
 
+  setDefaultMaxRedirects(config.maxRedirects);
   const db = opts.db ?? (await Database.open({ dataDir: config.dataDir }));
   const log = app.log;
   const settings = new SettingsService(db, config);
