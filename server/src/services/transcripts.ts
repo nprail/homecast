@@ -68,7 +68,7 @@ export const SYSTEM_USER = 'system';
 
 export class TranscriptService {
   /** Set by the app: the server's hosted audio copy for an episode, if there is one. */
-  localAudio: ((episodeId: string) => { path: string } | null) | null = null;
+  localAudio: ((episodeId: string, signal: AbortSignal) => Promise<{ path: string } | null>) | null = null;
   /** Fired after each job finishes (auto-transcribe tops up the queue from here). */
   onJobFinished: (() => void) | null = null;
   private active = new Map<string, AbortController>();
@@ -249,14 +249,18 @@ export class TranscriptService {
       const modelPath = resolveModelPath(this.config, model);
       if (!existsSync(modelPath)) await this.fetchModel(model, modelPath, ctl.signal, job);
 
-      // Prefer the server's hosted copy of the episode (no download, and no feed traffic).
-      const hosted = this.localAudio?.(episode.id) ?? null;
-      let audio: string;
-      if (hosted) {
-        this.setStage(job, 'Using hosted audio', 0);
-        audio = hosted.path;
-      } else {
-        this.setStage(job, 'Downloading audio', 0);
+      // Use the server's hosted copy. When hosting is on, this starts or joins the hosting download of
+      // this episode, so the audio is fetched once and kept. Otherwise download a temporary copy.
+      this.setStage(job, 'Downloading audio', 0);
+      let audio = '';
+      try {
+        const hosted = (await this.localAudio?.(episode.id, ctl.signal)) ?? null;
+        if (hosted) audio = hosted.path;
+      } catch (e) {
+        if (ctl.signal.aborted) throw e;
+        throw new Error(`Audio download failed: ${e instanceof Error ? e.message : 'download failed'}`);
+      }
+      if (!audio) {
         audio = path.join(dir, 'audio.bin');
         let bytes: number;
         try {

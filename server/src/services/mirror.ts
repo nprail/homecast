@@ -40,6 +40,8 @@ export class MirrorService {
   private abort = new AbortController();
   private stoppedReason: Stop = null;
   private lastError: string | null = null;
+  /** Downloads in progress, so the copy loop and a transcription never fetch the same episode twice. */
+  private inflight = new Map<string, Promise<'ok' | 'failed' | 'limit'>>();
 
   constructor(
     private db: Database,
@@ -94,6 +96,42 @@ export class MirrorService {
     return ep && !ep.deleted ? this.localAudio(ep) : null;
   }
 
+  /**
+   * Make sure a transcription can read a local copy without downloading the episode a second time.
+   * Returns the existing copy, or joins/starts the hosting download and waits for it. Returns null when
+   * hosting can't hold the file (disabled, podcast not subscribed, or over the cap/disk reserve), so the
+   * caller downloads its own temporary copy. Throws when the download itself fails.
+   */
+  async ensureLocal(episodeId: string, signal?: AbortSignal): Promise<LocalAudio | null> {
+    const ep = this.db.episodes.get(episodeId);
+    if (!ep || ep.deleted) return null;
+    const have = this.localAudio(ep);
+    if (have) return have;
+    if (!this.enabled() || !this.subscribedPodcastIds().includes(ep.podcastId)) return null;
+    const joining = this.inflight.has(ep.id);
+    const budget = this.budget();
+    if (!joining && budget.stop) return null;
+    const pending = this.download(ep, budget.maxBytes || MAX_EPISODE_BYTES);
+    const outcome = await new Promise<'ok' | 'failed' | 'limit'>((resolve, reject) => {
+      if (signal?.aborted) return reject(signal.reason);
+      const onAbort = () => reject(signal?.reason); // stop waiting; the copy keeps downloading for hosting
+      signal?.addEventListener('abort', onAbort, { once: true });
+      pending.then(resolve, reject).finally(() => signal?.removeEventListener('abort', onAbort));
+    });
+    if (outcome === 'ok') return this.localAudio(ep);
+    if (outcome === 'limit') return null;
+    throw new Error(this.db.episodeMirrors.get(ep.id)?.error ?? 'download failed');
+  }
+
+  /** Start (or join) the download of one episode. */
+  private download(ep: Episode, maxBytes: number): Promise<'ok' | 'failed' | 'limit'> {
+    const running = this.inflight.get(ep.id);
+    if (running) return running;
+    const p = this.fetchOne(ep, maxBytes).finally(() => this.inflight.delete(ep.id));
+    this.inflight.set(ep.id, p);
+    return p;
+  }
+
   // ---- the copy loop --------------------------------------------------------------------------
 
   private async run(): Promise<void> {
@@ -109,7 +147,7 @@ export class MirrorService {
         this.log.info({ reason: budget.stop }, 'episode hosting paused');
         break;
       }
-      const outcome = await this.fetchOne(next, budget.maxBytes);
+      const outcome = await this.download(next, budget.maxBytes);
       if (outcome === 'limit') {
         this.stoppedReason = budget.binding;
         break;
@@ -137,7 +175,7 @@ export class MirrorService {
     let best: Episode | null = null;
     for (const p of this.subscribedPodcastIds()) {
       for (const e of this.db.episodes.find({ podcastId: p })) {
-        if (e.deleted || !this.needsCopy(e, mirrors.get(e.id), t)) continue;
+        if (e.deleted || this.inflight.has(e.id) || !this.needsCopy(e, mirrors.get(e.id), t)) continue;
         if (!best || e.releasedAt > best.releasedAt) best = e;
       }
     }

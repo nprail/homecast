@@ -169,6 +169,44 @@ describe('episode hosting', () => {
     }
     expect(audioHits()).toBe(hits);
   });
+
+  const transcribe = async (episodeId: string) => {
+    const r = await a.app.inject({ method: 'POST', url: `/api/v1/episodes/${episodeId}/transcript`, headers: bearer(maya) });
+    expect(r.statusCode).toBe(202);
+    const jobId = r.json().job.id;
+    const end = Date.now() + 10_000;
+    while (a.ctx.db.jobs.get(jobId)!.status !== 'done') {
+      if (Date.now() > end || a.ctx.db.jobs.get(jobId)!.status === 'failed') throw new Error(a.ctx.db.jobs.get(jobId)!.error ?? 'timed out');
+      await new Promise((res) => setTimeout(res, 25));
+    }
+  };
+  const episodePath = (id: string) => new URL(a.ctx.db.episodes.get(id)!.audioUrl).pathname;
+
+  it('transcribing an episode that is not hosted yet shares one download with hosting', async () => {
+    await patch({ enabled: true, maxGB: null }); // hosting starts copying in the background
+    const ep = episodes()[3]!;
+    await transcribe(ep.id); // asks for the audio while hosting may be mid-run
+    await a.ctx.mirror.kick();
+    expect(copies()).toHaveLength(EPISODES);
+    for (const e of episodes()) expect(origin.hits[episodePath(e.id)]).toBe(1); // nothing fetched twice
+  });
+
+  it('downloads a temporary copy only when hosting is off', async () => {
+    const ep = episodes()[0]!;
+    await transcribe(ep.id);
+    expect(origin.hits[episodePath(ep.id)]).toBe(1);
+    expect(copies()).toHaveLength(0);
+  });
+
+  it('falls back to one temporary download when the episode does not fit under the cap', async () => {
+    await patch({ enabled: true, maxGB: 0.000001 }); // 1 KB, smaller than any episode
+    await a.ctx.mirror.kick();
+    const ep = episodes()[0]!;
+    const before = origin.hits[episodePath(ep.id)] ?? 0;
+    await transcribe(ep.id);
+    expect((origin.hits[episodePath(ep.id)] ?? 0) - before).toBeLessThanOrEqual(2); // hosting's refused attempt + the temp copy
+    expect(copies()).toHaveLength(0);
+  });
 });
 
 describe('parseRange', () => {

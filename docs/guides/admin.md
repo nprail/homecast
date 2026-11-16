@@ -33,7 +33,7 @@ Feeds with no subscribers are not polled. **Remove orphans** deletes them and th
 Off by default. When you turn on **Keep copies of episodes on this server** (**Settings → Episode hosting**), the server downloads every episode of the podcasts people subscribe to and keeps the audio on its own disk:
 
 - **One at a time, newest first.** Copies are made in the background, one download at a time, so the server's bandwidth isn't swamped.
-- **Served from the server.** Playing or downloading an episode, in the web player and in the Android and iOS apps, uses the server's copy, so the podcast's own host isn't hit again. Transcripts use the copy too.
+- **Served from the server.** Playing or downloading an episode, in the web player and in the Android and iOS apps, uses the server's copy, so the podcast's own host isn't hit again. Transcripts use the copy too: if an episode is transcribed before it has been copied, the transcription joins the hosting download, so the audio is fetched once. If an episode can't be hosted (over the storage cap, or its podcast has no subscribers), transcription downloads a temporary copy instead.
 - **Storage cap.** Optionally set a cap in GB. Copying also stops while less than 5 GB is free on the data disk, and the page says why it paused.
 - **Failures are retried** with increasing delays (15 minutes, doubling, up to a day). An episode larger than 4 GB is never copied.
 - **Copies follow the feed.** If a feed changes an episode's audio URL, the old copy is replaced. Copies of podcasts nobody follows are removed.

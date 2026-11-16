@@ -77,7 +77,7 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
     void mirror.kick();
   };
   transcripts.onJobFinished = () => autoTranscribe.tick();
-  transcripts.localAudio = (id) => mirror.localAudioById(id);
+  transcripts.localAudio = (id, signal) => mirror.ensureLocal(id, signal);
   const maintenance = new Maintenance(db, backup, sync, usage, audit, sessions, transcripts, ctx.loginGuard, log);
 
   const isHttps = config.publicUrl.startsWith('https://');
