@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_channel_name">Playback</string>
+    <string name="playback_downloads_channel_name">Downloads</string>
+    <string name="playback_downloads_title">Downloading episode</string>
+    <string name="playback_downloads_cancel">Cancel</string>
+</resources>

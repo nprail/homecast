@@ -1,0 +1,5 @@
+<resources>
+    <color name="hc_window_bg">#0E1014</color>
+    <color name="hc_icon_bg">#4FD1C5</color>
+    <color name="hc_icon_fg">#04201D</color>
+</resources>

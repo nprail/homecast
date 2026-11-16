@@ -6,3 +6,11 @@ data-*/
 .DS_Store
 .env
 site/
+
+# iOS
+ios/build/
+xcuserdata/
+*.xcuserstate
+
+# Swift source folder named Data (case-insensitive match on macOS)
+!ios/Sources/Homecast/Core/Data/

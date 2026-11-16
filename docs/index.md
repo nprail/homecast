@@ -8,7 +8,7 @@ description: "A self-hosted podcast player with a sync server, admin dashboard a
 Homecast is a podcast player with a self-hosted sync server. You run one small Node.js process, your family or team signs in with invite codes, and everyone's subscriptions, progress, bookmarks and playlists stay in sync across devices.
 
 ::: callout info "What is in the box"
-The **server** (Fastify + LokiJS), the **web player** (an installable, offline-first PWA) and the **admin dashboard** are built. Native Android and iOS apps are planned and will speak the same [sync protocol](/reference/sync).
+The **server** (Fastify + LokiJS), the **web player** (an installable, offline-first PWA) and the **admin dashboard** are built. The native **Android** (Kotlin, with Android Auto) and **iOS** (Swift, with CarPlay) apps live in `android/` and `ios/` and speak the same [sync protocol](/reference/sync).
 :::
 
 ## Highlights

@@ -10,7 +10,8 @@ A podcast player with a self-hosted sync server. See [`SPEC.md`](SPEC.md) for th
 | **Admin dashboard** (`web/`, served at `/admin`): Overview, Users & invites, Feeds, Jobs, Usage, Audit log, Settings | Built |
 | `shared/`: API/sync schemas (zod), smart-playlist evaluator and test vectors | Built and tested |
 | **Player PWA** (`web/`, served at `/`): library, playback, Up Next, playlists, smart playlists, bookmarks, transcripts, Discover, downloads/offline, sync | Built |
-| Android, iOS | Not started (milestones 6, 7) |
+| **iOS** (`ios/`): SwiftUI app + CarPlay, local-first sync, downloads, transcripts | Built (CarPlay untested on a real head unit) |
+| **Android** (`android/`): Compose + Material 3 app with Android Auto, local-first sync, downloads, transcripts | Built (Android Auto verified on the Desktop Head Unit; not on a real head unit) |
 
 The player and the admin dashboard are one React app: `/` is the player, `/admin` the dashboard.
 
@@ -76,8 +77,8 @@ The image runs as a non-root user with a read-only root filesystem (only `/data`
 | `FFMPEG_BIN` | `ffmpeg` | |
 | `WEB_DIR` | `../web/dist` | Static dashboard |
 | `MAX_EPISODES_PER_FEED` | `5000` | |
-| `ALLOW_PRIVATE_NETWORKS` | `false` | Tests/dev only: disables the SSRF guard's address blocking |
 | `MAX_REDIRECTS` | `10` | Redirects followed for feeds/audio (0 to 30); each hop is re-validated |
+| `ALLOW_PRIVATE_NETWORKS` | `false` | Tests/dev only: disables the SSRF guard's address blocking |
 | `LOG_LEVEL` | `info` | |
 
 ## Documentation
@@ -155,8 +156,8 @@ The transcript tests run the real worker pipeline against stand-in `ffmpeg`/`whi
 - Usage `feedBytes` are attributed to a feed's subscribers (split evenly), or to the requesting user when a feed is first added.
 - Feeds with no subscribers are not polled; "Remove orphans" deletes them and their episodes.
 - Private feed URLs (and anything with credentials) are redacted in the admin Feeds list.
-- Access tokens are kept in memory by the dashboard; a page reload restores the session from the refresh cookie.
 - **Episode hosting** (off by default): optionally keeps a server-side copy of every episode of subscribed podcasts, with an optional storage cap; the audio proxy and transcripts use the copy. See the admin guide.
+- Access tokens are kept in memory by the dashboard; a page reload restores the session from the refresh cookie.
 - Request an Apple CarPlay entitlement early (spec §3.12); nothing here depends on it.
 
 ## License and credits
