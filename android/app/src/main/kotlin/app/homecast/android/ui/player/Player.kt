@@ -9,6 +9,10 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
+import app.homecast.contract.Chapter
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -91,7 +95,7 @@ fun MiniPlayer(onOpen: () -> Unit) {
 // Full-screen player
 // ---------------------------------------------------------------------------------------------------------------
 
-private enum class PlayerSheet { Speed, Sleep, Queue }
+private enum class PlayerSheet { Speed, Sleep, Queue, Chapters }
 
 @Composable
 fun NowPlayingScreen(onClose: () -> Unit, nav: AppNav) {
@@ -102,6 +106,12 @@ fun NowPlayingScreen(onClose: () -> Unit, nav: AppNav) {
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
     var showTranscript by rememberSaveable { mutableStateOf(false) }
     val scheme = MaterialTheme.colorScheme
+    var chapters by remember { mutableStateOf<List<Chapter>>(emptyList()) }
+    LaunchedEffect(episode?.id) {
+        chapters = emptyList()
+        episode?.id?.let { chapters = graph.remote.chapters(it) }
+    }
+    val currentChapter = chapters.lastOrNull { it.startMs <= st.positionMs }
 
     Surface(Modifier.fillMaxSize(), color = scheme.background) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(scheme.primaryContainer.copy(alpha = 0.7f), scheme.background), endY = 1600f))) {
@@ -145,6 +155,7 @@ fun NowPlayingScreen(onClose: () -> Unit, nav: AppNav) {
                 // Title
                 Column(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalAlignment = Alignment.Start) {
                     Text(episode.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (currentChapter != null) Text(currentChapter.title, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         st.podcast?.title.orEmpty(), style = MaterialTheme.typography.bodyLarge, color = scheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.clickable(enabled = st.podcast != null) { st.podcast?.let { onClose(); nav.podcast(it.id) } },
@@ -163,11 +174,11 @@ fun NowPlayingScreen(onClose: () -> Unit, nav: AppNav) {
                 }
                 Spacer(Modifier.height(8.dp))
                 val bookmarks by remember(episode.id) { graph.library.bookmarksForEpisode(episode.id) }.collectAsStateWithLifecycle(emptyList())
-                Scrubber(st, bookmarks.map { it.positionMs }) { graph.player.seekTo(it) }
+                Scrubber(st, bookmarks.map { it.positionMs }, chapters.map { it.startMs }) { graph.player.seekTo(it) }
                 Spacer(Modifier.height(4.dp))
                 Transport(st)
                 Spacer(Modifier.height(8.dp))
-                ActionRow(st, showTranscript, onSpeed = { sheet = PlayerSheet.Speed }, onSleep = { sheet = PlayerSheet.Sleep }, onQueue = { sheet = PlayerSheet.Queue },
+                ActionRow(st, showTranscript, hasChapters = chapters.isNotEmpty(), onChapters = { sheet = PlayerSheet.Chapters }, onSpeed = { sheet = PlayerSheet.Speed }, onSleep = { sheet = PlayerSheet.Sleep }, onQueue = { sheet = PlayerSheet.Queue },
                     onBookmark = { ui.bookmarkTarget = BookmarkTarget(episode.id, graph.player.state.value.positionMs) },
                     onTranscript = { showTranscript = !showTranscript })
                 Spacer(Modifier.height(12.dp))
@@ -178,6 +189,7 @@ fun NowPlayingScreen(onClose: () -> Unit, nav: AppNav) {
         PlayerSheet.Speed -> SpeedSheet(st) { sheet = null }
         PlayerSheet.Sleep -> SleepSheet(st) { sheet = null }
         PlayerSheet.Queue -> UpNextSheet(st) { sheet = null }
+        PlayerSheet.Chapters -> ChaptersSheet(chapters, st.positionMs, onSeek = { graph.player.seekTo(it) }) { sheet = null }
         null -> {}
     }
 }
@@ -241,7 +253,7 @@ private fun SkipIcon(back: Boolean, seconds: Int) {
 
 @Composable
 private fun ActionRow(
-    st: PlayerState, transcriptOn: Boolean,
+    st: PlayerState, transcriptOn: Boolean, hasChapters: Boolean, onChapters: () -> Unit,
     onSpeed: () -> Unit, onSleep: () -> Unit, onBookmark: () -> Unit, onTranscript: () -> Unit, onQueue: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -257,6 +269,7 @@ private fun ActionRow(
         IconButton(onClick = onTranscript) {
             Icon(if (transcriptOn) Icons.Filled.Subject else Icons.Outlined.Subject, if (transcriptOn) "Hide transcript" else "Show transcript", tint = if (transcriptOn) scheme.primary else scheme.onSurfaceVariant)
         }
+        if (hasChapters) IconButton(onClick = onChapters) { Icon(Icons.AutoMirrored.Outlined.FormatListBulleted, "Chapters") }
         IconButton(onClick = onQueue) { Icon(Icons.Outlined.QueueMusic, "Up Next") }
     }
 }
@@ -295,7 +308,7 @@ internal fun rememberNow(): State<Long> = produceState(System.currentTimeMillis(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Scrubber(st: PlayerState, bookmarkMs: List<Long>, onSeek: (Long) -> Unit) {
+private fun Scrubber(st: PlayerState, bookmarkMs: List<Long>, chapterMs: List<Long>, onSeek: (Long) -> Unit) {
     val duration = st.durationMs
     // While dragging (and briefly after release until the player catches up) we show our own value, not the 500 ms ticks.
     var drag by remember { mutableStateOf<Float?>(null) }
@@ -311,6 +324,8 @@ private fun Scrubber(st: PlayerState, bookmarkMs: List<Long>, onSeek: (Long) -> 
     val colors = SliderDefaults.colors(thumbColor = scheme.primary, activeTrackColor = scheme.primary, inactiveTrackColor = scheme.outlineVariant)
     val ticks = remember(bookmarkMs, duration) { if (duration > 0) bookmarkMs.map { (it.toFloat() / duration).coerceIn(0f, 1f) } else emptyList() }
     val amber = scheme.tertiary
+    val gaps = remember(chapterMs, duration) { if (duration > 0) chapterMs.filter { it in 1 until duration }.map { it.toFloat() / duration } else emptyList() }
+    val gapColor = scheme.background
 
     Column(Modifier.fillMaxWidth()) {
         Slider(
@@ -323,6 +338,9 @@ private fun Scrubber(st: PlayerState, bookmarkMs: List<Long>, onSeek: (Long) -> 
             track = { s ->
                 Box(Modifier.fillMaxWidth().height(24.dp), contentAlignment = Alignment.Center) {
                     SliderDefaults.Track(s, colors = colors, drawStopIndicator = null, thumbTrackGapSize = 4.dp)
+                    if (gaps.isNotEmpty()) androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+                        gaps.forEach { g -> drawRect(gapColor, androidx.compose.ui.geometry.Offset(g * size.width - 0.75.dp.toPx(), size.height / 2 - 2.dp.toPx()), androidx.compose.ui.geometry.Size(1.5.dp.toPx(), 4.dp.toPx())) }
+                    }
                     if (ticks.isNotEmpty()) androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
                         ticks.forEach { t ->
                             val x = t * size.width
@@ -338,6 +356,27 @@ private fun Scrubber(st: PlayerState, bookmarkMs: List<Long>, onSeek: (Long) -> 
                 if (duration > 0) "-${Fmt.clock(remaining)}" + if (st.speed != 1.0) "  at ${Fmt.speed(st.speed)}" else "" else "--:--",
                 style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/** Chapter list for the playing episode: the current one is highlighted, tap to jump there. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChaptersSheet(chapters: List<Chapter>, positionMs: Long, onSeek: (Long) -> Unit, onDismiss: () -> Unit) {
+    val current = chapters.indexOfLast { it.startMs <= positionMs }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Text("Chapters", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            itemsIndexed(chapters, key = { i, c -> "$i-${c.startMs}" }) { i, c ->
+                val on = i == current
+                ListItem(
+                    headlineContent = { Text(c.title, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal) },
+                    leadingContent = { Text(Fmt.clock(c.startMs), style = MaterialTheme.typography.labelLarge, color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(56.dp)) },
+                    colors = ListItemDefaults.colors(containerColor = if (on) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else androidx.compose.ui.graphics.Color.Transparent),
+                    modifier = Modifier.clickable { onSeek(c.startMs); onDismiss() },
+                )
+            }
         }
     }
 }

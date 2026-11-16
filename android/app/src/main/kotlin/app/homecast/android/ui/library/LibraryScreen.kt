@@ -157,6 +157,8 @@ private fun QuickLinks(nav: AppNav, bookmarks: Int, starred: Int) {
         )
         row(Icons.Outlined.NewReleases, MaterialTheme.colorScheme.primary, "Latest episodes", null) { nav.latest() }
         HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+        row(Icons.Outlined.ManageSearch, MaterialTheme.colorScheme.primary, "Search transcripts", null) { nav.searchTranscripts() }
+        HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
         row(Icons.Outlined.Bookmarks, MaterialTheme.colorScheme.tertiary, "Bookmarks", bookmarks) { nav.bookmarks() }
         HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
         row(Icons.Outlined.StarOutline, MaterialTheme.colorScheme.tertiary, "Starred", starred) { nav.starred() }
@@ -287,7 +289,7 @@ fun AddPodcastSheet(onDismiss: () -> Unit) {
             try {
                 val text = withContext(Dispatchers.IO) { context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } } ?: throw IllegalStateException("Couldn't read that file.")
                 val r = graph.remote.importOpml(text)
-                finish(buildString { append("Imported ${Fmt.plural(r.imported, "podcast")}"); if (r.failed > 0) append(", ${r.failed} failed") })
+                finish(r.summary)
             } catch (e: CancellationException) { throw e } catch (e: Exception) { error = friendly(e); busy = false }
         }
     }

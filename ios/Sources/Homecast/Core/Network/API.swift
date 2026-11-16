@@ -44,6 +44,29 @@ struct TranscriptResponse: Decodable {
     var job: Job?
 }
 
+/// `GET /search/transcripts`: episodes whose transcripts match, with the matching lines.
+struct TranscriptSearchHit: Decodable, Hashable { var startMs: Int; var text: String }
+struct TranscriptSearchItem: Decodable, Identifiable, Hashable {
+    var episodeId: String
+    var podcastId: String
+    var episodeTitle: String
+    var podcastTitle: String
+    var releasedAt: Double
+    var matches: Int
+    var hits: [TranscriptSearchHit]
+    var id: String { episodeId }
+}
+struct TranscriptSearchResponse: Decodable { var total: Int; var items: [TranscriptSearchItem] }
+
+/// `GET /episodes/:id/chapters`. `source` is "json" (publisher file), "feed" (written into the feed) or "description" (show-note timestamps).
+struct Chapter: Codable, Hashable {
+    var startMs: Int
+    var title: String
+    var img: String?
+    var url: String?
+}
+struct ChaptersResponse: Decodable { var source: String; var chapters: [Chapter] }
+
 struct AddPodcastResponse: Decodable {
     struct P: Decodable { var id: String; var title: String }
     var podcast: P
@@ -52,7 +75,15 @@ struct AddPodcastResponse: Decodable {
 struct OPMLImportResponse: Decodable {
     struct Failure: Decodable { var url: String; var error: String }
     var imported: Int
+    var alreadySubscribed: Int?
     var failed: [Failure]
+    /// "Imported 3 podcasts, 2 already subscribed, 1 failed".
+    var summary: String {
+        var parts = ["Imported \(Fmt.plural(imported, "podcast"))"]
+        if let n = alreadySubscribed, n > 0 { parts.append("\(n) already subscribed") }
+        if !failed.isEmpty { parts.append("\(failed.count) failed") }
+        return parts.joined(separator: ", ")
+    }
 }
 
 struct SyncRejected: Decodable { var collection: String; var id: String; var reason: String }

@@ -9,8 +9,9 @@ struct NowPlayingView: View {
     @State private var sheet: PlayerSheet?
     @State private var showTranscript = false
     @State private var markers: [Int] = []
+    @State private var chapters: [Chapter] = []
 
-    enum PlayerSheet: String, Identifiable { case speed, sleep, queue; var id: String { rawValue } }
+    enum PlayerSheet: String, Identifiable { case speed, sleep, queue, chapters; var id: String { rawValue } }
 
     var body: some View {
         let player = ws.player
@@ -31,7 +32,7 @@ struct NowPlayingView: View {
                     Spacer(minLength: 12)
                 }
                 titleBlock(player)
-                Scrubber(positionMs: player.positionMs, durationMs: player.durationMs, markers: markers, speed: player.speed) { player.seek(toMs: $0) }
+                Scrubber(positionMs: player.positionMs, durationMs: player.durationMs, markers: markers, chapters: chapters.map(\.startMs), speed: player.speed) { player.seek(toMs: $0) }
                     .padding(.horizontal, 28).padding(.top, 14)
                 transport(player)
                     .padding(.top, 10)
@@ -56,6 +57,12 @@ struct NowPlayingView: View {
         }
         .preferredColorScheme(.dark)
         .task(id: player.episode?.id) { await loadMarkers() }
+        .task(id: player.episode?.id) {
+            chapters = []
+            if let id = player.episode?.id { chapters = await ws.loadChapters(id) }
+        }
+        .onAppear { if ui.showTranscript { showTranscript = true; ui.showTranscript = false } }
+        .onChange(of: ui.showTranscript) { _, on in if on { showTranscript = true; ui.showTranscript = false } }
         .onAppear {
             #if DEBUG
             let e = ProcessInfo.processInfo.environment
@@ -68,6 +75,7 @@ struct NowPlayingView: View {
             case .speed: SpeedSheet().presentationDetents([.height(430)])
             case .sleep: SleepSheet().presentationDetents([.height(560), .large])
             case .queue: QueueSheet().presentationDetents([.medium, .large])
+            case .chapters: ChaptersSheet(chapters: chapters).presentationDetents([.medium, .large])
             }
         }
     }
@@ -105,6 +113,9 @@ struct NowPlayingView: View {
                 .font(.display(23)).foregroundStyle(Brand.text).multilineTextAlignment(.center).lineLimit(2)
             Text(player.podcast?.title ?? "")
                 .font(.system(size: 16, weight: .semibold)).foregroundStyle(Brand.accent).lineLimit(1)
+            if let c = Chapter.current(in: chapters, at: player.positionMs) {
+                Text(c.title).font(.system(size: 14, weight: .medium)).foregroundStyle(Brand.text.opacity(0.85)).lineLimit(1).transition(.opacity)
+            }
             if let e = player.error { Text(e).font(.footnote).foregroundStyle(Brand.danger).padding(.top, 2) }
             else if player.playingOffline { Label("Playing downloaded file", systemImage: "arrow.down.circle.fill").font(.caption).foregroundStyle(Brand.muted).labelStyle(.titleAndIcon) }
         }
@@ -177,6 +188,13 @@ struct NowPlayingView: View {
                 }
                 .accessibilityLabel("Transcript")
 
+                if !chapters.isEmpty {
+                    Button { sheet = .chapters } label: {
+                        Image(systemName: "list.bullet.indent").font(.system(size: 19)).foregroundStyle(Brand.text).frame(minWidth: 52, minHeight: 48)
+                    }
+                    .accessibilityLabel("Chapters")
+                }
+
                 Button { sheet = .queue } label: {
                     Image(systemName: "list.bullet").font(.system(size: 19)).foregroundStyle(Brand.text).frame(minWidth: 52, minHeight: 48)
                 }
@@ -192,5 +210,72 @@ struct NowPlayingView: View {
         guard let id = ws.player.episode?.id else { markers = []; return }
         let obs = ValueObservation.tracking { try Bookmark.filter(Column("episodeId") == id).filter(Column("deleted") == false).fetchAll($0).map(\.positionMs) }
         do { for try await v in obs.values(in: ws.db.pool) { markers = v } } catch {}
+    }
+}
+
+// MARK: Chapters
+
+extension Chapter {
+    /// The chapter playing at `ms`, or nil before the first one.
+    static func current(in list: [Chapter], at ms: Int) -> Chapter? { list.last { $0.startMs <= ms } }
+}
+
+private struct CachedChapters: Codable { var chapters: [Chapter]; var fetchedAt: Double }
+
+extension Workspace {
+    /// Chapters for an episode: the on-device copy while it is fresh, otherwise the server. Empty when there are none or
+    /// the server can't be reached (the next play asks again).
+    func loadChapters(_ episodeId: String) async -> [Chapter] {
+        let key = "chapters.\(episodeId)"
+        let now = Date().timeIntervalSince1970
+        if let c = db.kvJSON(key, as: CachedChapters.self) {
+            // Real chapter lists change rarely; an empty answer is rechecked daily in case the publisher adds them.
+            let ttl: Double = c.chapters.isEmpty ? 86_400 : 7 * 86_400
+            if now - c.fetchedAt < ttl { return c.chapters }
+        }
+        do {
+            let r: ChaptersResponse = try await api.get("/episodes/\(episodeId)/chapters")
+            db.setKVJSON(key, CachedChapters(chapters: r.chapters, fetchedAt: now))
+            return r.chapters
+        } catch let e as APIError where e.status == 404 {
+            db.setKVJSON(key, CachedChapters(chapters: [], fetchedAt: now))
+            return []
+        } catch {
+            return db.kvJSON(key, as: CachedChapters.self)?.chapters ?? []
+        }
+    }
+}
+
+/// Chapter list for the playing episode: the current one is highlighted, tap to jump.
+struct ChaptersSheet: View {
+    @Environment(Workspace.self) private var ws
+    @Environment(\.dismiss) private var dismiss
+    let chapters: [Chapter]
+
+    var body: some View {
+        let current = Chapter.current(in: chapters, at: ws.player.positionMs)
+        VStack(spacing: 0) {
+            Text("Chapters").font(.display(20)).padding(.top, 22).padding(.bottom, 8)
+            ScrollView {
+                LazyVStack(spacing: 6) {
+                    ForEach(chapters, id: \.startMs) { c in
+                        let on = c == current
+                        Button { ws.player.seek(toMs: c.startMs); Haptics.tap(); dismiss() } label: {
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Text(Fmt.clock(c.startMs)).font(.system(size: 13, weight: .semibold).monospacedDigit()).foregroundStyle(on ? Brand.accent : Brand.muted).frame(width: 52, alignment: .leading)
+                                Text(c.title).font(.system(size: 16, weight: on ? .semibold : .regular)).foregroundStyle(Brand.text).multilineTextAlignment(.leading)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 12).contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffect(on ? .regular.tint(Brand.accent.opacity(0.3)) : .regular.interactive(), in: .rect(cornerRadius: 16))
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                    }
+                }
+                .padding(.horizontal, 16).padding(.bottom, 24)
+            }
+        }
+        .brandScreen()
     }
 }

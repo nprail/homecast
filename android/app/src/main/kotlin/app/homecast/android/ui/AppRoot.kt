@@ -35,6 +35,7 @@ import app.homecast.android.ui.player.NowPlayingScreen
 import app.homecast.android.ui.player.PlaylistPickerSheet
 import app.homecast.android.ui.podcast.PodcastScreen
 import app.homecast.android.ui.queue.*
+import app.homecast.android.ui.search.TranscriptSearchScreen
 import app.homecast.android.ui.settings.SettingsScreen
 import app.homecast.android.ui.transcript.TranscriptScreen
 import app.homecast.contract.AuthState
@@ -68,6 +69,7 @@ class AppNav(val controller: NavHostController) {
     fun bookmarks() = controller.navigate("bookmarks")
     fun starred() = controller.navigate("starred")
     fun latest() = controller.navigate("latest")
+    fun searchTranscripts() = controller.navigate("search")
     fun tab(route: String) = controller.navigate(route) { popUpTo(controller.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true }
 }
 
@@ -138,6 +140,7 @@ private fun MainShell() {
                     composable("bookmarks") { BookmarksScreen(appNav) }
                     composable("starred") { EpisodeListScreen(EpisodeListKind.Starred, appNav) }
                     composable("latest") { EpisodeListScreen(EpisodeListKind.Latest, appNav) }
+                    composable("search") { TranscriptSearchScreen(appNav) }
                 }
             }
             // Full-screen player rises over everything.

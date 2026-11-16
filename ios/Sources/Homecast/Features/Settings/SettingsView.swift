@@ -111,7 +111,7 @@ struct SettingsView: View {
         do {
             let r: OPMLImportResponse = try await ws.api.postText("/opml/import", text: try String(contentsOf: u, encoding: .utf8), contentType: "text/x-opml")
             await ws.sync.sync()
-            Toaster.shared.show("Imported \(Fmt.plural(r.imported, "podcast"))\(r.failed.isEmpty ? "" : ", \(r.failed.count) failed")")
+            Toaster.shared.show(r.summary)
         } catch { Toaster.shared.show(error.localizedDescription) }
     }
 

@@ -5,6 +5,8 @@ struct Scrubber: View {
     let positionMs: Int
     let durationMs: Int
     var markers: [Int] = []
+    /// Chapter starts, drawn as thin gaps in the track.
+    var chapters: [Int] = []
     var speed: Double = 1
     let onSeek: (Int) -> Void
     @State private var dragMs: Int?
@@ -20,6 +22,9 @@ struct Scrubber: View {
                     Capsule().fill(.white.opacity(0.16))
                     Capsule().fill(LinearGradient(colors: [Brand.accent.opacity(0.85), Brand.accent], startPoint: .leading, endPoint: .trailing))
                         .frame(width: max(0, min(1, frac)) * w)
+                    ForEach(chapters.filter { $0 > 0 && $0 < durationMs }, id: \.self) { c in
+                        Rectangle().fill(Brand.bg).frame(width: 1.5, height: 7).offset(x: CGFloat(c) / CGFloat(durationMs) * w - 0.75)
+                    }
                     ForEach(markers, id: \.self) { m in
                         if durationMs > 0 {
                             Capsule().fill(Brand.amber).frame(width: 3, height: isDragging ? 14 : 10)

@@ -21,6 +21,7 @@ extension View {
             case .bookmarks: BookmarksView()
             case .starred: EpisodeListScreen(kind: .starred)
             case .latest: EpisodeListScreen(kind: .latest)
+            case .searchTranscripts: TranscriptSearchView()
             }
         }
     }
@@ -126,6 +127,8 @@ struct LibraryView: View {
         GlassEffectContainer(spacing: 12) {
             VStack(spacing: 0) {
                 link("Latest Episodes", icon: "clock.fill", route: .latest, detail: nil)
+                Divider().overlay(.white.opacity(0.08)).padding(.leading, 56)
+                link("Search Transcripts", icon: "text.magnifyingglass", route: .searchTranscripts, detail: nil)
                 Divider().overlay(.white.opacity(0.08)).padding(.leading, 56)
                 link("Bookmarks", icon: "bookmark.fill", route: .bookmarks, detail: lib.value.bookmarkCount, tint: Brand.amber)
                 Divider().overlay(.white.opacity(0.08)).padding(.leading, 56)
@@ -266,9 +269,130 @@ struct AddPodcastSheet: View {
                 let text = try String(contentsOf: u, encoding: .utf8)
                 let r: OPMLImportResponse = try await ws.api.postText("/opml/import", text: text, contentType: "text/x-opml")
                 await ws.sync.sync()
-                Toaster.shared.show("Imported \(Fmt.plural(r.imported, "podcast"))\(r.failed.isEmpty ? "" : ", \(r.failed.count) failed")")
+                Toaster.shared.show(r.summary)
                 dismiss()
             } catch { self.error = error.localizedDescription }
+        }
+    }
+}
+
+/// Search what was said across the transcripts of every podcast you follow. Runs on the server (transcripts aren't all on the device).
+struct TranscriptSearchView: View {
+    @Environment(Workspace.self) private var ws
+    @Environment(UIState.self) private var ui
+    @State private var query = ""
+    @State private var result: TranscriptSearchResponse?
+    @State private var shownQuery = ""
+    @State private var loading = false
+    @State private var error: String?
+
+    /// Start a little before the matched line so the sentence is heard from its start.
+    private static let leadMs = 1500
+    private static let minChars = 2
+
+    var body: some View {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                if let error {
+                    Label(error, systemImage: "wifi.slash").font(.system(size: 13, weight: .semibold)).foregroundStyle(Brand.amber)
+                        .padding(.horizontal, 16).frame(minHeight: 40).glassEffect(.regular, in: .capsule)
+                }
+                if q.count < Self.minChars {
+                    EmptyState(icon: "text.magnifyingglass", title: "Find a moment in any episode", message: "Search what was said. Only episodes that have a transcript are searched. Use quotes to match an exact phrase.")
+                } else if let result {
+                    if result.items.isEmpty && !loading {
+                        EmptyState(icon: "magnifyingglass", title: "No matches", message: "Try different words, or fewer of them.")
+                    }
+                    ForEach(result.items) { item in card(item) }
+                }
+            }
+            .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 24)
+        }
+        .navigationTitle("Search Transcripts")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $query, prompt: "What was said")
+        .overlay { if loading && result == nil { ProgressView() } }
+        .task(id: q) { await run(q) }
+        .brandScreen()
+    }
+
+    private func card(_ item: TranscriptSearchItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            NavigationLink(value: Route.episode(item.episodeId)) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.episodeTitle).font(.system(size: 16, weight: .semibold)).foregroundStyle(Brand.text).multilineTextAlignment(.leading)
+                    Text("\(item.podcastTitle) · \(item.matches == 1 ? "1 match" : "\(item.matches) matches")").font(.system(size: 13)).foregroundStyle(Brand.muted)
+                }
+            }
+            .buttonStyle(.plain)
+            ForEach(item.hits, id: \.startMs) { hit in
+                Button { Task { await open(item, at: hit.startMs) } } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(Fmt.clock(hit.startMs)).font(.system(size: 13, weight: .semibold).monospacedDigit()).foregroundStyle(Brand.accent).frame(width: 46, alignment: .leading)
+                        Text(highlighted(hit.text)).font(.system(size: 14)).foregroundStyle(Brand.text).multilineTextAlignment(.leading)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(10).frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .background(Brand.bg.opacity(0.4), in: .rect(cornerRadius: 12))
+                .accessibilityLabel("Play from \(Fmt.clock(hit.startMs)): \(hit.text)")
+            }
+            if item.matches > item.hits.count {
+                Text("+\(item.matches - item.hits.count) more in the transcript").font(.system(size: 12)).foregroundStyle(Brand.muted)
+            }
+        }
+        .padding(14).frame(maxWidth: .infinity, alignment: .leading).glassEffect(.regular, in: .rect(cornerRadius: 24))
+    }
+
+    /// The matched words in amber, using the same word and "quoted phrase" rules as the server.
+    private func highlighted(_ text: String) -> AttributedString {
+        var out = AttributedString(text)
+        var terms: [String] = []
+        var rest = Substring(shownQuery)
+        while let first = rest.first {
+            if first == "\"", let end = rest.dropFirst().firstIndex(of: "\"") {
+                terms.append(String(rest[rest.index(after: rest.startIndex) ..< end])); rest = rest[rest.index(after: end)...]
+            } else if first.isWhitespace || first == "\"" { rest = rest.dropFirst() }
+            else {
+                let end = rest.firstIndex(where: { $0.isWhitespace }) ?? rest.endIndex
+                terms.append(String(rest[..<end])); rest = rest[end...]
+            }
+        }
+        for t in terms where !t.isEmpty {
+            var from = out.startIndex
+            while from < out.endIndex, let r = out[from...].range(of: t, options: .caseInsensitive) {
+                out[r].foregroundColor = Brand.amber
+                out[r].font = .system(size: 14, weight: .semibold)
+                from = r.upperBound
+            }
+        }
+        return out
+    }
+
+    private func open(_ item: TranscriptSearchItem, at ms: Int) async {
+        await ws.player.play(item.episodeId, context: PlayContext(label: "Search"))
+        ws.player.seek(toMs: max(0, ms - Self.leadMs))
+        ui.showTranscript = true
+        ui.showPlayer = true
+    }
+
+    private func run(_ q: String) async {
+        guard q.count >= Self.minChars else { result = nil; error = nil; return }
+        try? await Task.sleep(for: .milliseconds(300))
+        if Task.isCancelled { return }
+        loading = true
+        defer { loading = false }
+        guard let e = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
+        do {
+            let r: TranscriptSearchResponse = try await ws.api.get("/search/transcripts?q=\(e)&limit=30")
+            if Task.isCancelled { return }
+            result = r; shownQuery = q; error = nil
+        } catch is CancellationError {
+        } catch {
+            if Task.isCancelled { return }
+            self.error = (error is NetworkError) ? "Search needs a connection to the server." : error.localizedDescription
         }
     }
 }

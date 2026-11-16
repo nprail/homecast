@@ -30,6 +30,8 @@ fun EpisodeScreen(episodeId: String, nav: AppNav) {
     val lib = graph.library
     val scope = rememberCoroutineScope()
     val item by remember(lib, episodeId) { lib.episode(episodeId) }.collectAsStateWithLifecycle(null)
+    var chapters by remember { mutableStateOf<List<app.homecast.contract.Chapter>>(emptyList()) }
+    LaunchedEffect(episodeId) { chapters = graph.remote.chapters(episodeId) }
     val bookmarks by remember(lib, episodeId) { lib.bookmarksForEpisode(episodeId) }.collectAsStateWithLifecycle(emptyList())
     val player by graph.player.state.collectAsStateWithLifecycle()
     val active by graph.downloads.active.collectAsStateWithLifecycle()
@@ -115,6 +117,24 @@ fun EpisodeScreen(episodeId: String, nav: AppNav) {
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         modifier = Modifier.clickable { nav.transcript(it.id) },
                     )
+                }
+
+                if (chapters.isNotEmpty()) {
+                    SectionLabel("Chapters")
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                        chapters.forEachIndexed { i, c ->
+                            if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                            ListItem(
+                                overlineContent = { Text(Fmt.clock(c.startMs)) },
+                                headlineContent = { Text(c.title) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.clickable {
+                                    if (isCurrent) { graph.player.seekTo(c.startMs); if (!isPlaying) graph.player.resume() }
+                                    else { graph.player.play(it.id); graph.player.seekTo(c.startMs) }
+                                },
+                            )
+                        }
+                    }
                 }
 
                 if (bookmarks.isNotEmpty()) {

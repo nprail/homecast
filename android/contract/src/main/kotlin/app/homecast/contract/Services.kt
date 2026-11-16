@@ -143,7 +143,25 @@ interface Library {
 
 data class DiscoverItem(val id: String, val title: String, val author: String, val imageUrl: String?, val description: String, val subscriberCount: Int, val addedAt: Long)
 data class SessionInfo(val id: String, val deviceName: String, val createdAt: Long, val lastUsedAt: Long, val current: Boolean)
-data class OpmlResult(val imported: Int, val failed: Int)
+data class OpmlResult(val imported: Int, val failed: Int, val alreadySubscribed: Int = 0) {
+    /** "Imported 3 podcasts, 2 already subscribed, 1 failed". */
+    val summary: String get() = buildString {
+        append("Imported $imported podcast${if (imported == 1) "" else "s"}")
+        if (alreadySubscribed > 0) append(", $alreadySubscribed already subscribed")
+        if (failed > 0) append(", $failed failed")
+    }
+}
+
+/** One chapter of an episode; it runs until the next one starts. */
+data class Chapter(val startMs: Long, val title: String)
+
+/** One matching line of a transcript, with where it starts. */
+data class TranscriptHit(val startMs: Long, val text: String)
+/** An episode whose transcript matches a search. `hits` holds the first few lines; `matches` counts all of them. */
+data class TranscriptSearchItem(
+    val episodeId: String, val podcastId: String, val episodeTitle: String, val podcastTitle: String,
+    val releasedAt: Long, val matches: Int, val hits: List<TranscriptHit>,
+)
 
 sealed interface TranscriptStatus {
     data class Ready(val transcript: Transcript) : TranscriptStatus
@@ -175,6 +193,13 @@ interface Remote {
      * reached within a few seconds; the caller then streams from the podcast's own URL. Never throws.
      */
     suspend fun streamUrl(episodeId: String): String? = null
+    /**
+     * Chapters for an episode (publisher file, feed, or show-note timestamps), cached on the device. Empty when there are
+     * none or the server can't be reached. Never throws.
+     */
+    suspend fun chapters(episodeId: String): List<Chapter> = emptyList()
+    /** Full-text search over the transcripts of podcasts you follow (needs the server). Throws `OfflineException` when unreachable. */
+    suspend fun searchTranscripts(query: String): List<TranscriptSearchItem> = emptyList()
 }
 
 // ---- Playback (implemented in :playback) ------------------------------------------------------------------------

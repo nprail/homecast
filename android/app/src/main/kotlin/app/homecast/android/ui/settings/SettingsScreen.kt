@@ -76,7 +76,7 @@ fun SettingsScreen(nav: AppNav) {
                 val text = withContext(Dispatchers.IO) { context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: error("Couldn't read that file.") }
                 val r = graph.remote.importOpml(text)
                 graph.sync.sync()
-                ui.toast("Imported ${r.imported}" + if (r.failed > 0) ", ${r.failed} failed" else "")
+                ui.toast(r.summary)
             } catch (e: CancellationException) { throw e } catch (e: Exception) { failure(e) }
         }
     }

@@ -11,6 +11,7 @@ struct EpisodeDetailView: View {
     @Environment(UIState.self) private var ui
     let episodeId: String
     @StateObject private var snap: Live<EpisodeSnapshot>
+    @State private var chapters: [Chapter] = []
 
     init(episodeId: String) {
         self.episodeId = episodeId
@@ -46,6 +47,22 @@ struct EpisodeDetailView: View {
                     }
                     .buttonStyle(.plain)
 
+                    if !chapters.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            SectionLabel("Chapters")
+                            ForEach(chapters, id: \.startMs) { c in
+                                Button { Task { await playAt(item, c.startMs) } } label: {
+                                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                        Text(Fmt.clock(c.startMs)).font(.system(size: 14, weight: .semibold).monospacedDigit()).foregroundStyle(Brand.accent).frame(width: 56, alignment: .leading)
+                                        Text(c.title).font(.system(size: 15)).foregroundStyle(Brand.text).multilineTextAlignment(.leading)
+                                        Spacer(minLength: 0)
+                                    }
+                                    .padding(.horizontal, 14).padding(.vertical, 10).glassEffect(.regular.interactive(), in: .rect(cornerRadius: 16))
+                                }.buttonStyle(.plain)
+                            }
+                        }
+                    }
+
                     if !snap.value.bookmarks.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
                             SectionLabel("Bookmarks")
@@ -77,6 +94,7 @@ struct EpisodeDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .task { chapters = await ws.loadChapters(episodeId) }
         .brandScreen()
     }
 

@@ -9,6 +9,7 @@ enum Route: Hashable {
     case bookmarks
     case starred
     case latest
+    case searchTranscripts
 }
 
 /// Transient confirmation, shown as a glass capsule.

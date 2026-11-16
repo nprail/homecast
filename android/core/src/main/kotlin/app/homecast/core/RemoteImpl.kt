@@ -37,7 +37,50 @@ class RemoteImpl(private val api: ApiClient, private val library: Library) : Rem
 
     override suspend fun importOpml(opml: String): OpmlResult {
         val o = parse(api.postText("/opml/import", opml, "text/x-opml").body)
-        return OpmlResult(o.num("imported")?.toInt() ?: 0, (o["failed"] as? JsonArray)?.size ?: 0)
+        return OpmlResult(o.num("imported")?.toInt() ?: 0, (o["failed"] as? JsonArray)?.size ?: 0, o.num("alreadySubscribed")?.toInt() ?: 0)
+    }
+
+    // ---- chapters: cached on the device, so the player doesn't ask the server for every play
+    private fun readCached(raw: String?): Pair<Long, List<Chapter>>? {
+        if (raw == null) return null
+        return try {
+            val o = parse(raw)
+            val at = o.num("fetchedAt")?.toLong() ?: return null
+            at to (o["chapters"] as? JsonArray).orEmpty().map { e -> val c = e.obj(); Chapter(c.num("startMs")?.toLong() ?: 0, c.str("title") ?: "") }
+        } catch (e: Exception) { null }
+    }
+
+    override suspend fun chapters(episodeId: String): List<Chapter> {
+        val key = "chapters.$episodeId"
+        val now = System.currentTimeMillis()
+        val cached = runCatching { readCached(library.kvGet(key)) }.getOrNull()
+        // Real lists change rarely; an empty answer is rechecked daily in case the publisher adds chapters.
+        if (cached != null && now - cached.first < (if (cached.second.isEmpty()) 24L else 7L * 24) * 3_600_000) return cached.second
+        fun store(list: List<Chapter>) = buildJsonObject {
+            put("fetchedAt", now)
+            put("chapters", buildJsonArray { list.forEach { c -> add(buildJsonObject { put("startMs", c.startMs); put("title", c.title) }) } })
+        }.toString()
+        return try {
+            val o = parse(api.get("/episodes/$episodeId/chapters").body)
+            val list = (o["chapters"] as? JsonArray).orEmpty().map { e -> val c = e.obj(); Chapter(c.num("startMs")?.toLong() ?: 0, c.str("title") ?: "") }.filter { it.title.isNotBlank() }
+            runCatching { library.kvSet(key, store(list)) }
+            list
+        } catch (e: ApiException) {
+            if (e.status == 404) { runCatching { library.kvSet(key, store(emptyList())) }; emptyList() } else cached?.second.orEmpty()
+        } catch (e: Exception) { cached?.second.orEmpty() }
+    }
+
+    override suspend fun searchTranscripts(query: String): List<TranscriptSearchItem> {
+        val q = URLEncoder.encode(query.trim().take(100), "UTF-8")
+        val o = parse(api.get("/search/transcripts?q=$q&limit=30").body)
+        return (o["items"] as? JsonArray).orEmpty().map { e ->
+            val i = e.obj()
+            TranscriptSearchItem(
+                episodeId = i.str("episodeId") ?: "", podcastId = i.str("podcastId") ?: "", episodeTitle = i.str("episodeTitle") ?: "",
+                podcastTitle = i.str("podcastTitle") ?: "", releasedAt = i.num("releasedAt")?.toLong() ?: 0, matches = i.num("matches")?.toInt() ?: 0,
+                hits = (i["hits"] as? JsonArray).orEmpty().map { h -> val j = h.obj(); TranscriptHit(j.num("startMs")?.toLong() ?: 0, j.str("text") ?: "") },
+            )
+        }
     }
 
     override suspend fun exportOpml(): String = api.get("/opml/export").body

@@ -4,6 +4,8 @@ import SwiftUI
 @MainActor @Observable
 final class UIState {
     var showPlayer = false
+    /// Set to open the player with its transcript showing (search results use this).
+    var showTranscript = false
     var playlistPickerEpisodeId: String?
     var showAddPodcast = false
     var bookmarkEditor: BookmarkTarget?
