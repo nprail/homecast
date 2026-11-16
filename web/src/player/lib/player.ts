@@ -2,6 +2,7 @@ import { resolveSpeed } from '@homecast/shared';
 import type { DownloadManager } from './downloads';
 import type { LocalData } from './data';
 import type { EpisodeRec, PodcastRec } from './db';
+import { artUrl } from './art';
 import { Store } from './store';
 import { signedStreamUrl } from './stream';
 
@@ -370,7 +371,7 @@ export class Player {
       title: episode.title,
       artist: podcast?.title ?? '',
       album: podcast?.title ?? '',
-      artwork: podcast?.imageUrl ? [{ src: podcast.imageUrl, sizes: '512x512' }] : [],
+      artwork: artUrl(podcast) ? [{ src: new URL(artUrl(podcast)!, location.origin).href, sizes: '512x512' }] : [],
     });
   }
 }

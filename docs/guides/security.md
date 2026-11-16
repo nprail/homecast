@@ -30,7 +30,7 @@ The audio proxy additionally requires authentication, only proxies URLs belongin
 
 ## Other protections
 
-- JSON-schema validation on every route, request body size limits, strict CORS, `helmet` headers and a Content-Security-Policy.
+- JSON-schema validation on every route, request body size limits, strict CORS, `helmet` headers and a Content-Security-Policy that only allows images from the server itself. Podcast covers are fetched by the server (through the same SSRF guard as feeds), checked to really be PNG, JPEG, GIF, WebP or AVIF (never SVG), cached in `DATA_DIR/cache/art` and served from `/api/v1/art/<podcast id>`. That endpoint needs no login, because an `<img>` tag can't send one; the podcast id is an unguessable UUID, and only the cover image is served.
 - Feed HTML is sanitized on the server, and sanitized again before the web app renders it.
 - Private feeds can only be added with their feed URL; their ids are never accepted by Discover or sync.
 - Streaming a hosted copy uses **signed URLs**: an HMAC over the episode, the user and an expiry (12 hours), keyed separately from the login secret. The server re-checks the account, the feed's visibility and the expiry on every range request. Anyone who obtains a signed link can hear that episode until it expires, so treat such links like session data: they appear in the player and in server access logs for their lifetime.

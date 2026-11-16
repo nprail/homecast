@@ -19,6 +19,24 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
+  // Podcast covers served by this server: cache-first (the URL carries a version tag for the image).
+  if (url.origin === self.location.origin && url.pathname.startsWith('/api/v1/art/')) {
+    event.respondWith(
+      caches.open(IMAGES).then(async (cache) => {
+        const hit = await cache.match(req);
+        if (hit) return hit;
+        const res = await fetch(req);
+        if (res.ok) {
+          await cache.put(req, res.clone());
+          const keys = await cache.keys();
+          if (keys.length > 400) await cache.delete(keys[0]);
+        }
+        return res;
+      }),
+    );
+    return;
+  }
+
   // Never touch the API (auth, sync, proxy) or the offline audio store: they have their own handling.
   if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
   if (req.headers.has('range')) return; // media range requests go straight to the network

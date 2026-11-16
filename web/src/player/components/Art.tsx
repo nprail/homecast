@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { artUrl } from '../lib/art';
 import type { PodcastRec } from '../lib/db';
 
 const TILES = ['#123B3A', '#5A3A1E', '#2E3F6B', '#4A3566', '#1F4D3A'];
@@ -9,8 +10,9 @@ export function Art({ podcast, size, radius = 10, className = '' }: { podcast?: 
   const [failed, setFailed] = useState(false);
   const bg = TILES[hash(podcast?.id ?? podcast?.title ?? '') % TILES.length]!;
   const style = { width: size, height: size, borderRadius: radius, background: bg };
-  if (podcast?.imageUrl && !failed) {
-    return <img src={podcast.imageUrl} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} className={`shrink-0 object-cover ${className}`} style={style} />;
+  const src = artUrl(podcast);
+  if (src && !failed) {
+    return <img src={src} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} className={`shrink-0 object-cover ${className}`} style={style} />;
   }
   return (
     <div className={`flex shrink-0 items-center justify-center overflow-hidden ${className}`} style={style} aria-hidden="true">

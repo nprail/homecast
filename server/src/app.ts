@@ -11,6 +11,7 @@ import { Database } from './db/index.js';
 import { LoginGuard } from './security/loginGuard.js';
 import { AuditService } from './services/audit.js';
 import { AutoTranscriber } from './services/autoTranscribe.js';
+import { ArtService } from './services/art.js';
 import { MirrorService } from './services/mirror.js';
 import { BackupService } from './services/backup.js';
 import { FeedPoller, FeedService } from './services/feeds.js';
@@ -21,6 +22,7 @@ import { SyncService } from './services/sync.js';
 import { TranscriptService } from './services/transcripts.js';
 import { UsageService } from './services/usage.js';
 import { adminRoutes } from './routes/admin.js';
+import { artRoutes } from './routes/art.js';
 import { authRoutes } from './routes/auth.js';
 import { healthRoutes } from './routes/health.js';
 import { libraryRoutes } from './routes/library.js';
@@ -63,7 +65,7 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
   const backup = new BackupService(db, config, settings, audit);
   const sync = new SyncService(db);
   const ctx: Ctx = {
-    config, db, sessions, audit, usage, settings, feeds, transcripts, autoTranscribe, mirror, sync, backup,
+    config, db, sessions, audit, usage, settings, feeds, transcripts, autoTranscribe, mirror, art: new ArtService(db, config, log), sync, backup,
     poller: new FeedPoller(db, feeds, log),
     loginGuard: new LoginGuard(),
     bootstrap: { token: null },
@@ -88,7 +90,7 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https:', 'http:'],
+        imgSrc: ["'self'", 'data:', 'blob:'], // covers are proxied through /api/v1/art
         fontSrc: ["'self'", 'data:'],
         connectSrc: ["'self'"],
         mediaSrc: ["'self'", 'blob:', 'https:', 'http:'], // audio streams straight from the podcast CDN
@@ -121,6 +123,8 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
     return reply.code(500).send({ error: { code: 'internal', message: 'Internal server error' } });
   });
 
+  // Artwork is cacheable, so it lives outside the scope below that marks every API response no-store.
+  await app.register(artRoutes(ctx), { prefix: '/api/v1' });
   await app.register(
     async (api) => {
       api.addHook('onSend', async (_req, reply) => {

@@ -1,6 +1,7 @@
 import type { Config } from './config.js';
 import type { Database } from './db/index.js';
 import type { LoginGuard } from './security/loginGuard.js';
+import type { ArtService } from './services/art.js';
 import type { AuditService } from './services/audit.js';
 import type { AutoTranscriber } from './services/autoTranscribe.js';
 import type { BackupService } from './services/backup.js';
@@ -24,6 +25,7 @@ export interface Ctx {
   transcripts: TranscriptService;
   autoTranscribe: AutoTranscriber;
   mirror: MirrorService;
+  art: ArtService;
   sync: SyncService;
   backup: BackupService;
   loginGuard: LoginGuard;
