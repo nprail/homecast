@@ -37,7 +37,7 @@ describe('auto-transcribe', () => {
   it('is off by default and does nothing', async () => {
     expect(a.ctx.autoTranscribe.tick()).toBe(0);
     const s = (await a.app.inject({ method: 'GET', url: '/api/v1/admin/settings', headers: bearer(admin) })).json();
-    expect(s.autoTranscribe).toEqual({ enabled: false, scope: 'new', podcastIds: null });
+    expect(s.autoTranscribe).toEqual({ enabled: false, scope: 'new', recentCount: 10, podcastIds: null });
     expect(s.autoTranscribePending).toBe(0);
   });
 
@@ -68,6 +68,28 @@ describe('auto-transcribe', () => {
     await until(() => a.ctx.autoTranscribe.eligible().length === 0 && systemJobs().every((j) => j.status === 'done'), 20000);
     expect(systemJobs()).toHaveLength(8);
     expect(a.ctx.autoTranscribe.tick()).toBe(0); // nothing is queued twice
+  });
+
+  it('"recent" covers only the newest N episodes of each podcast, as a rolling window', async () => {
+    // Alpha has 6 episodes, Beta 2. The last 3 of each = 3 + 2.
+    expect((await patch({ enabled: true, scope: 'recent', recentCount: 3, podcastIds: null })).json().autoTranscribe).toMatchObject({ scope: 'recent', recentCount: 3 });
+    // saving already queued the first few (3 at a time); queued + still waiting must be the window: 3 + 2
+    const inWindow = [...systemJobs().map((j) => a.ctx.db.episodes.get(j.episodeId)!), ...a.ctx.autoTranscribe.eligible()];
+    expect(inWindow).toHaveLength(5);
+    const alpha = a.ctx.db.episodes.find({ podcastId: podcast('Alpha').id }).filter((e) => !e.deleted).sort((x, y) => y.releasedAt - x.releasedAt);
+    const newest = new Set(alpha.slice(0, 3).map((e) => e.id));
+    expect(inWindow.filter((e) => e.podcastId === podcast('Alpha').id).every((e) => newest.has(e.id))).toBe(true);
+    await until(() => systemJobs().length === 5 && systemJobs().every((j) => j.status === 'done'));
+    expect(a.ctx.autoTranscribe.eligible()).toHaveLength(0); // done episodes stay inside the window; older ones are never queued
+    expect(a.ctx.autoTranscribe.tick()).toBe(0);
+    // widening the window queues the next ones
+    await patch({ enabled: true, scope: 'recent', recentCount: 5, podcastIds: null });
+    expect(systemJobs().length + a.ctx.autoTranscribe.eligible().length).toBe(7); // Alpha 5 + Beta 2
+    // the count is remembered when only the scope changes, and is validated
+    await patch({ enabled: true, scope: 'all', podcastIds: null });
+    expect(a.ctx.settings.get().autoTranscribe.recentCount).toBe(5);
+    expect((await patch({ enabled: true, scope: 'recent', recentCount: 0, podcastIds: null })).statusCode).toBe(400);
+    expect((await patch({ enabled: true, scope: 'recent', recentCount: 1001, podcastIds: null })).statusCode).toBe(400);
   });
 
   it('can be limited to selected podcasts', async () => {

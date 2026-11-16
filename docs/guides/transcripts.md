@@ -39,7 +39,7 @@ Models are looked up as `ggml-<name>.bin` in `WHISPER_MODEL_DIR`. If a standard 
 
 Under **Admin → Settings → Auto-transcribe** the server can queue transcripts without anyone asking:
 
-- **Which episodes**: *new episodes only* (found after you switch it on) or *all episodes, including the back catalogue*.
+- **Which episodes**: *new episodes only* (found after you switch it on), *the latest N episodes of each podcast* (a rolling window that also covers new releases, so older back catalogue is left alone), or *all episodes, including the whole back catalogue*.
 - **Which podcasts**: all podcasts, or only the ones you select. Only podcasts someone subscribes to are considered.
 
 A large back catalogue is fed into the queue a few jobs at a time, newest first, so manual requests are never stuck behind hundreds of jobs. An episode that already has a job is not queued again; use **Retry** on the Jobs page for failures. These jobs show **Auto-transcribe** as the requester.

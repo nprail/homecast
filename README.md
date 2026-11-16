@@ -139,7 +139,7 @@ Every `/api/v1/admin/*` route enforces the `admin` role server-side (covered by 
 | Jobs | `/admin/jobs` | Live progress, cancel/retry |
 | Usage | `/admin/usage` | 30 d / 90 d / 1 y, chart + table, per-user shares, CSV export |
 | Audit log | `/admin/audit` | Filter all / sign-ins / admin, paginated |
-| Settings | `/admin/settings` | Sign-ups on/off, poll interval, Whisper model, auto-transcribe (off / new episodes / all episodes, for all or selected podcasts), backups |
+| Settings | `/admin/settings` | Sign-ups on/off, poll interval, Whisper model, auto-transcribe (off / new episodes / the last N episodes per podcast / all episodes, for all or selected podcasts), backups |
 
 ## Tests
 

@@ -45,6 +45,24 @@ function AutoTranscribe({ value, onChange, pending, saved }: { value: AutoTransc
         <fieldset className="m-0 flex flex-col gap-2 border-0 p-0" disabled={!value.enabled}>
           <legend className="mb-1 p-0 text-[13px] font-medium text-ink-2">Which episodes</legend>
           <Choice name="at-scope" disabled={!value.enabled} checked={value.scope === 'new'} onChange={() => onChange({ ...value, scope: 'new' })} title="New episodes only" hint="Episodes the server finds from now on. The existing back catalogue is left alone." />
+          <Choice name="at-scope" disabled={!value.enabled} checked={value.scope === 'recent'} onChange={() => onChange({ ...value, scope: 'recent' })} title="The latest episodes of each podcast" hint="The newest N episodes of every podcast, including ones released later. Older episodes are left alone." />
+          {value.scope === 'recent' && (
+            <div className="ml-8 flex items-center gap-2 text-sm">
+              <label htmlFor="at-recent">Last</label>
+              <input
+                id="at-recent"
+                type="number"
+                min={1}
+                max={1000}
+                step={1}
+                disabled={!value.enabled}
+                value={value.recentCount}
+                onChange={(e) => onChange({ ...value, recentCount: Math.min(1000, Math.max(1, Math.round(Number(e.target.value) || 1))) })}
+                className={`${inputCls} max-w-[110px]`}
+              />
+              <span className="text-muted">episodes per podcast</span>
+            </div>
+          )}
           <Choice name="at-scope" disabled={!value.enabled} checked={value.scope === 'all'} onChange={() => onChange({ ...value, scope: 'all' })} title="All episodes, including the back catalogue" hint="Fed into the queue a few at a time, newest first, so manual requests are never stuck behind them. This can take a long time on large feeds." />
         </fieldset>
         <fieldset className="m-0 flex flex-col gap-2 border-0 p-0" disabled={!value.enabled}>

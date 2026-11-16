@@ -52,7 +52,8 @@ export const patchSettingsBody = z.object({
   autoTranscribe: z
     .object({
       enabled: z.boolean(),
-      scope: z.enum(['new', 'all']),
+      scope: z.enum(['new', 'recent', 'all']),
+      recentCount: z.number().int().min(1).max(1000).optional(),
       podcastIds: z.array(z.string().min(8).max(64)).max(1000).nullable(),
     })
     .optional(),

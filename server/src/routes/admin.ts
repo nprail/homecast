@@ -306,7 +306,7 @@ export function adminRoutes(ctx: Ctx) {
         registrationOpen, whisperModel, pollIntervalMinutes,
         episodeMirror: { enabled: episodeMirror.enabled, maxGB: episodeMirror.maxGB },
         episodeMirrorStatus: ctx.mirror.status(),
-        autoTranscribe: { enabled: autoTranscribe.enabled, scope: autoTranscribe.scope, podcastIds: autoTranscribe.podcastIds },
+        autoTranscribe: { enabled: autoTranscribe.enabled, scope: autoTranscribe.scope, recentCount: autoTranscribe.recentCount, podcastIds: autoTranscribe.podcastIds },
         autoTranscribePending: ctx.autoTranscribe.eligible().length,
       };
     };

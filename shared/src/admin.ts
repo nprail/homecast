@@ -113,11 +113,16 @@ export interface AuditEntry {
   detail: string | null;
 }
 
-export type AutoTranscribeScope = 'new' | 'all';
+export type AutoTranscribeScope = 'new' | 'recent' | 'all';
 export interface AutoTranscribeSettings {
   enabled: boolean;
-  /** `new`: only episodes the server discovers after this was switched on. `all`: also the back catalogue. */
+  /**
+   * `new`: only episodes the server discovers after this was switched on. `recent`: the newest
+   * `recentCount` episodes of each podcast (a rolling window that includes new releases). `all`: the whole back catalogue.
+   */
   scope: AutoTranscribeScope;
+  /** How many of each podcast's newest episodes `recent` covers. */
+  recentCount: number;
   /** `null` = every podcast with a subscriber; otherwise only these podcast ids. */
   podcastIds: string[] | null;
 }

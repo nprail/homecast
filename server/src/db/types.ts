@@ -196,7 +196,7 @@ export interface ServerSettings {
   registrationOpen: boolean;
   whisperModel: string;
   pollIntervalMinutes: number;
-  autoTranscribe: { enabled: boolean; scope: 'new' | 'all'; podcastIds: string[] | null; enabledAt: number };
+  autoTranscribe: { enabled: boolean; scope: 'new' | 'recent' | 'all'; recentCount: number; podcastIds: string[] | null; enabledAt: number };
   episodeMirror: { enabled: boolean; maxGB: number | null };
   lastBackupAt: number | null;
   lastBackupBytes: number | null;

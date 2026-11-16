@@ -13,7 +13,7 @@ export class SettingsService {
         registrationOpen: true,
         whisperModel: config.whisperModel,
         pollIntervalMinutes: 30,
-        autoTranscribe: { enabled: false, scope: 'new', podcastIds: null, enabledAt: 0 },
+        autoTranscribe: { enabled: false, scope: 'new', recentCount: 10, podcastIds: null, enabledAt: 0 },
         episodeMirror: { enabled: false, maxGB: null },
         lastBackupAt: null,
         lastBackupBytes: null,
@@ -23,7 +23,8 @@ export class SettingsService {
   get doc() {
     const d = this.db.serverSettings.find()[0]!;
     // Databases created before auto-transcribe existed.
-    d.autoTranscribe ??= { enabled: false, scope: 'new', podcastIds: null, enabledAt: 0 };
+    d.autoTranscribe ??= { enabled: false, scope: 'new', recentCount: 10, podcastIds: null, enabledAt: 0 };
+    d.autoTranscribe.recentCount ??= 10;
     d.episodeMirror ??= { enabled: false, maxGB: null };
     return d;
   }
@@ -32,7 +33,7 @@ export class SettingsService {
   }
   update(
     patch: Partial<Pick<ServerSettings, 'registrationOpen' | 'whisperModel' | 'pollIntervalMinutes'>> & {
-      autoTranscribe?: { enabled: boolean; scope: 'new' | 'all'; podcastIds: string[] | null };
+      autoTranscribe?: { enabled: boolean; scope: 'new' | 'recent' | 'all'; recentCount?: number; podcastIds: string[] | null };
       episodeMirror?: { enabled: boolean; maxGB: number | null };
     },
   ): ServerSettings {
@@ -44,7 +45,7 @@ export class SettingsService {
       const prev = d.autoTranscribe;
       // "New episodes" counts from the moment it is switched on (or the scope is narrowed to new).
       const restart = autoTranscribe.enabled && (!prev.enabled || (autoTranscribe.scope === 'new' && prev.scope !== 'new'));
-      d.autoTranscribe = { ...autoTranscribe, enabledAt: restart ? Date.now() : prev.enabledAt };
+      d.autoTranscribe = { ...autoTranscribe, recentCount: autoTranscribe.recentCount ?? prev.recentCount, enabledAt: restart ? Date.now() : prev.enabledAt };
     }
     this.db.serverSettings.saveQuiet(d);
     return d;

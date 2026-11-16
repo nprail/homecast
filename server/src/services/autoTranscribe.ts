@@ -8,8 +8,8 @@ import { SYSTEM_USER, type TranscriptService } from './transcripts.js';
 const QUEUE_HEADROOM = 3;
 
 /**
- * Queues transcripts automatically (settings: off / new episodes / all episodes, for every podcast or a
- * selection). Only podcasts somebody subscribes to are considered. A large back catalogue is fed into
+ * Queues transcripts automatically (settings: off / new episodes / the last N episodes of each podcast /
+ * all episodes, for every podcast or a selection). Only podcasts somebody subscribes to are considered. A large back catalogue is fed into
  * the queue a few episodes at a time, newest first, so manual requests are never stuck behind hundreds
  * of jobs. An episode that already has a job (done, failed or cancelled) is not queued again.
  */
@@ -41,8 +41,11 @@ export class AutoTranscriber {
     const out: Episode[] = [];
     for (const p of this.db.podcasts.where((x) => !x.deleted && (!allowed || allowed.has(x.id)))) {
       if (this.feeds.subscriberCount(p.id) === 0) continue;
-      for (const e of this.db.episodes.find({ podcastId: p.id })) {
-        if (e.deleted || jobbed.has(e.id) || this.transcripts.get(e.id)) continue;
+      let episodes = this.db.episodes.find({ podcastId: p.id }).filter((e) => !e.deleted);
+      // "Last N": the window is the podcast's N newest episodes, whether or not they are already done.
+      if (cfg.scope === 'recent') episodes = episodes.sort((a, b) => b.releasedAt - a.releasedAt).slice(0, cfg.recentCount);
+      for (const e of episodes) {
+        if (jobbed.has(e.id) || this.transcripts.get(e.id)) continue;
         if (cfg.scope === 'new' && e.createdAt < cfg.enabledAt) continue;
         out.push(e);
       }
