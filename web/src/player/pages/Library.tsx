@@ -5,7 +5,7 @@ import { useApp } from '../AppData';
 import { post, postText } from '../../lib/api';
 import { Art } from '../components/Art';
 import { EpisodeRow } from '../components/Episodes';
-import { Plus } from '../components/picons';
+import { Plus, Search } from '../components/picons';
 import { EmptyState, Page, primaryBtn } from '../components/page';
 import { btnGhost, btnPrimary, fieldCls, Sheet } from '../components/Sheet';
 import { useStates, useSubscribedPodcasts } from '../lib/hooks';
@@ -19,6 +19,7 @@ export function AddPodcastSheet({ onClose }: { onClose: () => void }) {
   const [priv, setPriv] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ url: string; error: string }[] | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   const submit = async () => {
@@ -40,9 +41,18 @@ export function AddPodcastSheet({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setErr(null);
     try {
-      const r = await postText<{ imported: number; failed: unknown[] }>('/opml/import', await f.text(), 'text/x-opml');
+      const r = await postText<{ imported: number; alreadySubscribed?: number; failed: { url: string; error: string }[]; skipped?: number }>('/opml/import', await f.text(), 'text/x-opml');
       await sync.sync();
-      toast(`Imported ${r.imported} podcast${r.imported === 1 ? '' : 's'}${r.failed.length ? `, ${r.failed.length} failed` : ''}`);
+      const parts = [`Imported ${r.imported} podcast${r.imported === 1 ? '' : 's'}`];
+      if (r.alreadySubscribed) parts.push(`${r.alreadySubscribed} already subscribed`);
+      if (r.skipped) parts.push(`${r.skipped} over the 500 limit`);
+      if (r.failed.length) parts.push(`${r.failed.length} failed`);
+      toast(parts.join(', '));
+      if (r.failed.length) {
+        // Keep the sheet open so the feeds that did not import can be seen.
+        setFailed(r.failed);
+        return;
+      }
       onClose();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Import failed');
@@ -52,6 +62,15 @@ export function AddPodcastSheet({ onClose }: { onClose: () => void }) {
   };
   return (
     <Sheet title="Add a podcast" subtitle="Paste a feed URL, or import an OPML file." onClose={onClose}>
+      {failed ? (
+        <>
+          <p className="mt-4 mb-2 text-sm">These feeds could not be imported:</p>
+          <ul className="m-0 max-h-60 list-none overflow-y-auto p-0">
+            {failed.map((f) => (<li key={f.url} className="mb-2 rounded-xl bg-p-surface px-3 py-2 text-[13px]"><div className="break-all">{f.url}</div><div className="text-p-danger">{f.error}</div></li>))}
+          </ul>
+          <div className="mt-4 flex"><button type="button" className={btnPrimary} onClick={onClose}>Done</button></div>
+        </>
+      ) : (
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <label htmlFor="feed-url" className="mt-4 block text-[13px] font-medium text-p-muted">Feed URL</label>
         <input id="feed-url" type="url" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/feed.xml" className={`${fieldCls} h-12`} autoComplete="off" />
@@ -62,7 +81,8 @@ export function AddPodcastSheet({ onClose }: { onClose: () => void }) {
           <button type="submit" disabled={busy || !url} className={btnPrimary}>{busy ? 'Adding…' : 'Add podcast'}</button>
         </div>
       </form>
-      <div className="mt-4 border-t border-p-line pt-4">
+      )}
+      <div className={`mt-4 border-t border-p-line pt-4 ${failed ? 'hidden' : ''}`}>
         <input ref={file} type="file" accept=".opml,.xml,text/xml,text/x-opml" hidden onChange={(e) => e.target.files?.[0] && void importOpml(e.target.files[0])} />
         <button type="button" disabled={busy} onClick={() => file.current?.click()} className={`${btnGhost} w-full`}>Import OPML file</button>
       </div>
@@ -95,7 +115,7 @@ export function LibraryPage() {
   const podMap = new Map((pods ?? []).map((p) => [p.id, p]));
   const recent = (latest ?? []).filter((e) => states.get(e.id)?.status !== 'played').slice(0, 12);
   return (
-    <Page title="Podcasts" wide right={<button onClick={() => setAdding(true)} className={primaryBtn}><Plus size={18} />Add</button>}>
+    <Page title="Podcasts" wide right={<div className="flex items-center gap-2"><Link to="/search" aria-label="Search transcripts" className="flex h-10 w-10 items-center justify-center rounded-full border border-p-line bg-p-surface text-p-text no-underline"><Search size={18} /></Link><button onClick={() => setAdding(true)} className={primaryBtn}><Plus size={18} />Add</button></div>}>
       {pods && pods.length === 0 && (
         <EmptyState title="No podcasts yet">
           Add a feed URL or import an OPML file, or browse what others on this server listen to in <Link to="/discover" className="text-p-accent">Discover</Link>.

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { SmartPlaylistDefinition, TranscriptSegment } from '@homecast/shared';
+import type { Chapter, ChapterSource, SmartPlaylistDefinition, TranscriptSegment } from '@homecast/shared';
 
 /**
  * Local-first database (spec §2, §9). Everything the UI shows is read from here; the network only
@@ -87,6 +87,14 @@ export interface TranscriptRec {
   model: string | null;
   segments: TranscriptSegment[];
 }
+/** Cached chapter list. `none` records that the server has no chapters, so it isn't asked again for a day. */
+export interface ChaptersRec {
+  episodeId: string;
+  source: ChapterSource | null;
+  chapters: Chapter[];
+  none?: boolean;
+  fetchedAt: number;
+}
 export interface DownloadRec {
   episodeId: string;
   podcastId: string;
@@ -108,6 +116,7 @@ export class PodDB extends Dexie {
   smartPlaylists!: Table<SmartPlaylistRec, string>;
   settings!: Table<SettingsRec, string>;
   transcripts!: Table<TranscriptRec, string>;
+  chapters!: Table<ChaptersRec, string>;
   downloads!: Table<DownloadRec, string>;
   kv!: Table<KV, string>;
 
@@ -126,6 +135,7 @@ export class PodDB extends Dexie {
       downloads: 'episodeId, podcastId',
       kv: 'key',
     });
+    this.version(2).stores({ chapters: 'episodeId' });
   }
 
   async getKV<T>(key: string, fallback: T): Promise<T> {

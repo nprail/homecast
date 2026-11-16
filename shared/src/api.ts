@@ -98,4 +98,42 @@ export interface TranscriptSegment {
   endMs: number;
   text: string;
 }
+/** One chapter of an episode. `startMs` is the chapter's start; it ends where the next one begins. */
+export interface Chapter {
+  startMs: number;
+  title: string;
+  img?: string;
+  url?: string;
+}
+export type ChapterSource = 'json' | 'feed' | 'description';
+export interface ChaptersResponse {
+  source: ChapterSource;
+  chapters: Chapter[];
+}
+
+export const transcriptSearchQuery = z.object({
+  q: z.string().trim().min(2).max(100),
+  /** Limit the search to one podcast. */
+  podcastId: z.string().min(8).max(64).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export interface TranscriptHit {
+  startMs: number;
+  text: string;
+}
+export interface TranscriptSearchItem {
+  episodeId: string;
+  podcastId: string;
+  episodeTitle: string;
+  podcastTitle: string;
+  releasedAt: number;
+  /** Number of matching lines in the episode (hits holds the first few). */
+  matches: number;
+  hits: TranscriptHit[];
+}
+export interface TranscriptSearchResponse {
+  total: number;
+  items: TranscriptSearchItem[];
+}
 export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';

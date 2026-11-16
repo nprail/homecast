@@ -30,7 +30,8 @@ All routes live under `/api/v1` and speak JSON. Authenticated routes need `Autho
 | `POST /subscriptions` | subscribe by podcast id (public podcasts only) |
 | `DELETE /subscriptions/:id` | unsubscribe |
 | `GET /discover?q=&sort=` | podcasts other users follow; `sort` is `subscribers`, `recent` or `az` |
-| `POST /opml/import`, `GET /opml/export` | OPML in and out |
+| `POST /opml/import` | OPML document as the body (`text/x-opml`). Subscribes to up to 500 feeds, nested folders included. Returns `{ imported, alreadySubscribed, failed: [{ url, error }], skipped }` |
+| `GET /opml/export` | your subscriptions as OPML |
 | `GET /me/export` | all of your own data as JSON |
 
 ## Sync, transcripts and audio
@@ -40,6 +41,8 @@ All routes live under `/api/v1` and speak JSON. Authenticated routes need `Autho
 | `POST /sync` | delta sync, see [Sync protocol](/reference/sync) |
 | `POST /episodes/:id/transcript` | request a transcript (deduplicated) |
 | `GET /episodes/:id/transcript` | the transcript, or `202` while it is being generated |
+| `GET /search/transcripts?q=&podcastId=&limit=&offset=` | full-text search over the transcripts of podcasts you subscribe to. `q` is 2 to 100 characters; every word must match, `"quoted phrases"` match exactly. Returns `{ total, items: [{ episodeId, podcastId, episodeTitle, podcastTitle, releasedAt, matches, hits: [{ startMs, text }] }] }`, most matches first, up to three hits per episode |
+| `GET /episodes/:id/chapters` | `{ source: "json" \| "feed" \| "description", chapters: [{ startMs, title, img?, url? }] }`, or `404` when the episode has none. The publisher's chapters file is fetched on demand (SSRF-guarded) and cached for a day |
 | `GET /jobs/:id` | job status (the requester, attached users and admins) |
 | `GET /proxy/audio?url=` | authenticated audio proxy, web app only; supports `Range`. Serves the server's own copy when episode hosting has one |
 | `GET /episodes/:id/stream` | a signed, short-lived URL (12 hours) to stream the server's copy: `{ url, expiresAt }`, or `url: null` when the episode isn't hosted. Needs `Authorization` |

@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../AppData';
+import { chapterIndexAt, useChapters } from '../lib/chapters';
 import { activeSegment, loadTranscript, modelLabel, requestTranscript, type TranscriptStatus } from '../lib/transcripts';
 import { clock, minutesLeft, remaining, speedText } from '../lib/format';
 import { useDesktop, useDownloadedSet, useEpisodes, useQueueIds, usePodcastMap } from '../lib/hooks';
@@ -82,6 +83,8 @@ function PlayerPanel() {
   const nextId = queue.find((q) => q !== episode?.id);
   const nextEp = useEpisodes(nextId ? [nextId] : []).get(nextId ?? '');
   const pods = usePodcastMap();
+  const chapters = useChapters(episode?.id)?.chapters ?? [];
+  const chapterIdx = chapterIndexAt(chapters, pos);
   const hasTranscript = useLiveQuery(async () => (episode ? !!(await db.transcripts.get(episode.id)) : false), [db, episode?.id]);
   if (!episode) return <Empty />;
   const sleepLabel = sleep.kind === 'episode' ? 'End of ep.' : sleep.kind === 'timer' ? `${Math.max(1, Math.ceil((sleep.endsAt - Date.now()) / 60000))} min` : 'Sleep';
@@ -104,11 +107,12 @@ function PlayerPanel() {
       <div className="mt-5 shrink-0">
         <div className="font-display text-[22px] leading-[27px] font-semibold">{episode.title}</div>
         <div className="mt-1.5 text-sm text-p-muted">{podcast?.title}</div>
+        {chapterIdx >= 0 && <div className="mt-1 truncate text-sm font-medium text-p-accent" aria-live="polite">{chapters[chapterIdx]!.title}</div>}
         {error && <div role="alert" className="mt-2 text-[13px] text-p-danger">{error}</div>}
       </div>
 
       <div className="mt-3.5 shrink-0">
-        <ProgressBar positionMs={pos} durationMs={dur} markers={markers} onSeek={(ms) => player.seekTo(ms)} />
+        <ProgressBar positionMs={pos} durationMs={dur} markers={markers} chapters={chapters.map((c) => c.startMs)} onSeek={(ms) => player.seekTo(ms)} />
         <div className="mt-1 flex justify-between text-[13px] text-p-muted tnum"><span>{clock(pos)}</span><span>{dur ? remaining(pos, dur) : '--:--'}</span></div>
       </div>
 
@@ -132,6 +136,14 @@ function PlayerPanel() {
           <Lines /><span className="text-xs text-p-muted">{hasTranscript ? 'Transcript' : 'Transcript'}</span>
         </button>
       </div>
+
+      {chapters.length > 0 && (
+        <button onClick={() => ui.set({ sheet: 'chapters' })} className="mt-3 flex h-12 w-full shrink-0 items-center gap-3 rounded-[14px] border-0 bg-p-surface px-4 text-left text-p-text">
+          <Lines size={18} />
+          <span className="min-w-0 flex-1 truncate text-sm"><span className="font-medium">Chapters</span><span className="text-p-muted"> · {chapterIdx >= 0 ? `${chapterIdx + 1} of ${chapters.length}` : `${chapters.length}`}</span></span>
+          <ChevronDown size={18} />
+        </button>
+      )}
 
       {fading && (
         <button onClick={() => { player.extendSleep(5); toast('Added 5 minutes'); }} className="mt-3 h-10 shrink-0 rounded-xl border border-p-amber bg-transparent text-sm font-semibold text-p-amber">Sleep timer ending. Tap to add 5 minutes</button>

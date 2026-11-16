@@ -11,7 +11,7 @@ import { ui } from '../lib/ui';
 import { Art } from './Art';
 import { EpisodeMenu, PlaylistPicker } from './Episodes';
 import { NowPlaying, PlayButton } from './NowPlaying';
-import { Bookmark, Compass, CloudOff, Download, Lines, Mic, Moon, Queue, Shield, Skip, User } from './picons';
+import { Bookmark, Compass, CloudOff, Download, Lines, Mic, Moon, Queue, Search, Shield, Skip, User } from './picons';
 import { ProgressBar } from './ProgressBar';
 import { PlayerSheets } from './Sheets';
 
@@ -41,6 +41,7 @@ function Sidebar() {
       <NavLink to="/" end className={({ isActive }) => navCls(isActive)}><Mic />Podcasts</NavLink>
       <NavLink to="/queue" className={({ isActive }) => navCls(isActive)}><Queue />Up Next</NavLink>
       <NavLink to="/discover" className={({ isActive }) => navCls(isActive)}><Compass />Discover</NavLink>
+      <NavLink to="/search" className={({ isActive }) => navCls(isActive)}><Search />Search transcripts</NavLink>
       <NavLink to="/bookmarks" className={({ isActive }) => navCls(isActive)}><Bookmark />Bookmarks</NavLink>
       <NavLink to="/downloads" className={({ isActive }) => navCls(isActive)}><Download />Downloads</NavLink>
       <div className="mt-5 flex h-6 items-center justify-between px-3 text-xs font-semibold tracking-[0.06em] text-p-muted uppercase">

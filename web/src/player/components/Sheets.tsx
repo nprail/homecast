@@ -5,6 +5,7 @@ import { clock, speedText } from '../lib/format';
 import { useSettings } from '../lib/hooks';
 import { toast, ui } from '../lib/ui';
 import { activeSegment } from '../lib/transcripts';
+import { chapterIndexAt, useChapters } from '../lib/chapters';
 import { Moon } from './picons';
 import { btnGhost, btnPrimary, fieldCls, Sheet } from './Sheet';
 
@@ -143,5 +144,30 @@ export function PlayerSheets() {
   if (sheet === 'speed') return <SpeedSheet onClose={close} />;
   if (sheet === 'sleep') return <SleepSheet onClose={close} />;
   if (sheet === 'bookmark') return <BookmarkSheet onClose={close} />;
+  if (sheet === 'chapters') return <ChaptersSheet onClose={close} />;
   return null;
+}
+
+/** Chapter list for the playing episode: the current chapter is highlighted, tap one to jump there. */
+export function ChaptersSheet({ onClose }: { onClose: () => void }) {
+  const { player } = useApp();
+  const episodeId = player.state.use((s) => s.episodeId);
+  const pos = player.state.use((s) => s.positionMs);
+  const chapters = useChapters(episodeId ?? undefined);
+  const list = chapters?.chapters ?? [];
+  const current = chapterIndexAt(list, pos);
+  return (
+    <Sheet title="Chapters" subtitle={list.length ? `${list.length} chapters` : undefined} onClose={onClose}>
+      <div className="mt-3 max-h-[55vh] overflow-y-auto">
+        {list.length === 0 && <p className="py-6 text-center text-sm text-p-muted">This episode has no chapters.</p>}
+        {list.map((c, i) => (
+          <button key={`${c.startMs}-${i}`} data-autofocus={i === current || undefined} onClick={() => { player.seekTo(c.startMs); onClose(); }} aria-current={i === current ? 'true' : undefined} className={`flex w-full items-center gap-3 rounded-xl border-0 px-2.5 py-3 text-left ${i === current ? 'bg-p-accent-soft text-p-text' : 'bg-transparent text-p-text'}`}>
+            <span className={`w-14 shrink-0 text-[13px] tnum ${i === current ? 'font-semibold text-p-accent' : 'text-p-muted'}`}>{clock(c.startMs)}</span>
+            <span className={`min-w-0 flex-1 text-[15px] leading-5 ${i === current ? 'font-semibold' : ''}`}>{c.title}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-4 flex"><button className={btnPrimary} onClick={onClose}>Done</button></div>
+    </Sheet>
+  );
 }

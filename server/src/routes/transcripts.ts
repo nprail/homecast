@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
+import { transcriptSearchQuery } from '@homecast/shared';
 import type { Ctx } from '../context.js';
 import type { Episode, User } from '../db/types.js';
 import { makeAuth, userOf } from '../plugins/auth.js';
 import { notFound } from '../util/errors.js';
+import { query } from '../util/validate.js';
 
 export function transcriptRoutes(ctx: Ctx) {
   const { authenticate } = makeAuth(ctx);
@@ -40,6 +42,20 @@ export function transcriptRoutes(ctx: Ctx) {
       const job = ctx.db.jobs.find({ episodeId: ep.id }).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (job && (job.status === 'queued' || job.status === 'running')) return reply.code(202).send({ status: job.status, job: jobDto(job) });
       throw notFound('No transcript for this episode');
+    });
+
+    // Search the transcripts of the podcasts you subscribe to.
+    app.get('/search/transcripts', { preHandler: authenticate, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
+      const q = query(req, transcriptSearchQuery);
+      const mine = new Set(ctx.db.subscriptions.find({ userId: userOf(req).id }).filter((s) => !s.deleted).map((s) => s.podcastId));
+      return ctx.search.transcripts(q.q, mine, q);
+    });
+
+    app.get<{ Params: { id: string } }>('/episodes/:id/chapters', { preHandler: authenticate }, async (req) => {
+      const ep = episodeFor(userOf(req), req.params.id);
+      const r = await ctx.chapters.get(ep);
+      if (!r) throw notFound('No chapters for this episode');
+      return r;
     });
 
     app.get<{ Params: { id: string } }>('/jobs/:id', { preHandler: authenticate }, async (req) => {

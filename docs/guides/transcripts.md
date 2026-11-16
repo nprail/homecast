@@ -44,6 +44,10 @@ Under **Admin → Settings → Auto-transcribe** the server can queue transcript
 
 A large back catalogue is fed into the queue a few jobs at a time, newest first, so manual requests are never stuck behind hundreds of jobs. An episode that already has a job is not queued again; use **Retry** on the Jobs page for failures. These jobs show **Auto-transcribe** as the requester.
 
+## Searching transcripts
+
+Search across everything you follow from the **Search transcripts** page. The server scans the stored transcripts, which is fast at the size of a household library (a few hundred episodes). A podcast nobody on the account follows is never searched, and you only see podcasts you subscribe to. See [Using the player](/guides/player).
+
 ## In the player
 
 The transcript view highlights the current line (it looks about 1.5 s ahead to compensate for late Whisper timestamps), lets you tap a line to seek, search within the episode and bookmark a line. Transcripts are cached on your device for offline reading.

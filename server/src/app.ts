@@ -12,6 +12,8 @@ import { LoginGuard } from './security/loginGuard.js';
 import { AuditService } from './services/audit.js';
 import { AutoTranscriber } from './services/autoTranscribe.js';
 import { ArtService } from './services/art.js';
+import { ChaptersService } from './services/chapters.js';
+import { SearchService } from './services/search.js';
 import { MirrorService } from './services/mirror.js';
 import { BackupService } from './services/backup.js';
 import { FeedPoller, FeedService } from './services/feeds.js';
@@ -65,7 +67,7 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
   const backup = new BackupService(db, config, settings, audit);
   const sync = new SyncService(db);
   const ctx: Ctx = {
-    config, db, sessions, audit, usage, settings, feeds, transcripts, autoTranscribe, mirror, art: new ArtService(db, config, log), sync, backup,
+    config, db, sessions, audit, usage, settings, feeds, transcripts, autoTranscribe, mirror, art: new ArtService(db, config, log), chapters: new ChaptersService(db, config, log), search: new SearchService(db), sync, backup,
     poller: new FeedPoller(db, feeds, log),
     loginGuard: new LoginGuard(),
     bootstrap: { token: null },

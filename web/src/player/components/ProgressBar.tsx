@@ -2,7 +2,7 @@ import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { clock } from '../lib/format';
 
 /** Seek bar with bookmark ticks (amber). Pointer + keyboard accessible. */
-export function ProgressBar({ positionMs, durationMs, markers = [], onSeek, compact, label = 'Seek' }: { positionMs: number; durationMs: number; markers?: number[]; onSeek: (ms: number) => void; compact?: boolean; label?: string }) {
+export function ProgressBar({ positionMs, durationMs, markers = [], chapters = [], onSeek, compact, label = 'Seek' }: { positionMs: number; durationMs: number; markers?: number[]; chapters?: number[]; onSeek: (ms: number) => void; compact?: boolean; label?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<number | null>(null);
   const dur = Math.max(1, durationMs);
@@ -48,6 +48,7 @@ export function ProgressBar({ positionMs, durationMs, markers = [], onSeek, comp
     >
       <div className="absolute right-0 left-0 rounded-[3px] bg-p-line" style={track} />
       <div className="absolute left-0 rounded-[3px] bg-p-accent" style={{ ...track, width: `${pct}%` }} />
+      {chapters.map((c, i) => (c > 0 && c < dur ? <div key={`c${c}-${i}`} className="absolute w-px bg-p-bg" style={{ left: `${(c / dur) * 100}%`, ...track }} /> : null))}
       {markers.map((m, i) => (
         <div key={`${m}-${i}`} className="absolute w-[3px] rounded-sm bg-p-amber" style={{ left: `${Math.min(100, (m / dur) * 100)}%`, top: compact ? 2 : 3, height: compact ? 12 : 14 }} />
       ))}

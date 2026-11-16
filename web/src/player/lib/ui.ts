@@ -1,6 +1,6 @@
 import { Store } from './store';
 
-export type SheetName = 'speed' | 'sleep' | 'bookmark' | null;
+export type SheetName = 'speed' | 'sleep' | 'bookmark' | 'chapters' | null;
 interface UIState {
   /** The full Now Playing panel. */
   nowPlaying: boolean;

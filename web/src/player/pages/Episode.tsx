@@ -7,6 +7,7 @@ import { Bookmark } from '../components/picons';
 import { EmptyState, outlineBtn, Page } from '../components/page';
 import { clock, lengthText } from '../lib/format';
 import { useGoBack, useStates } from '../lib/hooks';
+import { useChapters } from '../lib/chapters';
 import { safeHtml } from '../lib/sanitize';
 import { toast, ui } from '../lib/ui';
 
@@ -18,6 +19,7 @@ export function EpisodePage() {
   const podcast = useLiveQuery(async () => (ep ? db.podcasts.get(ep.podcastId) : undefined), [db, ep?.podcastId]);
   const state = useStates().get(id);
   const bookmarks = useLiveQuery(async () => (await db.bookmarks.where('episodeId').equals(id).toArray()).filter((b) => !b.deleted).sort((a, b) => a.positionMs - b.positionMs), [db, id]) ?? [];
+  const chapters = useChapters(id)?.chapters ?? [];
   if (ep === undefined) return <Page><p className="text-p-muted">Loading…</p></Page>;
   if (!ep) return <Page><EmptyState title="Episode not found"><Link to="/" className="text-p-accent">Back to your library</Link></EmptyState></Page>;
   const date = new Date(ep.releasedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -45,6 +47,17 @@ export function EpisodePage() {
         <div className="prose-p mt-6 text-[15px] leading-6 text-p-text/90 [&_a]:text-p-accent [&_p]:my-3 [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-5" dangerouslySetInnerHTML={{ __html: safeHtml(ep.description) }} />
       ) : (
         <p className="mt-6 text-sm text-p-muted">This episode has no show notes.</p>
+      )}
+      {chapters.length > 0 && (
+        <>
+          <h2 className="mt-8 mb-2 text-xs font-semibold tracking-[0.06em] text-p-muted uppercase">Chapters</h2>
+          {chapters.map((c, i) => (
+            <button key={`${c.startMs}-${i}`} onClick={() => void player.play(id, { label: podcast?.title ?? 'Episode' }).then(() => player.seekTo(c.startMs))} className="mb-1.5 flex w-full items-center gap-3 rounded-[14px] border-0 bg-p-surface px-3.5 py-3 text-left text-p-text">
+              <span className="w-14 shrink-0 text-[13px] font-semibold text-p-accent tnum">{clock(c.startMs)}</span>
+              <span className="min-w-0 flex-1 text-sm leading-5">{c.title}</span>
+            </button>
+          ))}
+        </>
       )}
       <h2 className="mt-8 mb-2 text-xs font-semibold tracking-[0.06em] text-p-muted uppercase">Bookmarks</h2>
       {bookmarks.length === 0 ? <p className="m-0 text-sm text-p-muted">No bookmarks in this episode.</p> : bookmarks.map((b) => (

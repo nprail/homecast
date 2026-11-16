@@ -7,6 +7,7 @@ import { LoginPage, RegisterPage, ResetPasswordPage } from './pages/Auth';
 import { AppDataProvider } from './player/AppData';
 import { PlayerShell } from './player/components/Shell';
 import { BookmarksPage } from './player/pages/Bookmarks';
+import { SearchPage } from './player/pages/Search';
 import { DiscoverPage } from './player/pages/Discover';
 import { DownloadsPage } from './player/pages/Downloads';
 import { EpisodePage } from './player/pages/Episode';
@@ -89,6 +90,7 @@ export function App() {
         <Route path="smart/:id" element={<SmartPlaylistPage />} />
         <Route path="smart/:id/edit" element={<SmartEditorPage />} />
         <Route path="discover" element={<DiscoverPage />} />
+        <Route path="search" element={<SearchPage />} />
         <Route path="bookmarks" element={<BookmarksPage />} />
         <Route path="downloads" element={<DownloadsPage />} />
         <Route path="profile" element={<ProfilePage />} />

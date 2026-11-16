@@ -1,4 +1,4 @@
-import type { SmartPlaylistDefinition } from '@homecast/shared';
+import type { Chapter, ChapterSource, SmartPlaylistDefinition } from '@homecast/shared';
 
 /** Fields every record carries. `rev` is assigned by the server on every synced write. */
 export interface Base {
@@ -86,6 +86,22 @@ export interface Episode extends Base {
   createdAt: number;
   transcriptUrl: string | null;
   transcriptType: string | null;
+  /** Podcasting 2.0 `<podcast:chapters>` JSON file, fetched on demand. */
+  chaptersUrl?: string | null;
+  /** Chapters written inline in the feed (Podlove Simple Chapters). */
+  inlineChapters?: Chapter[] | null;
+}
+
+/** Cached chapter list for an episode. `id` is the episode id. */
+export interface EpisodeChapters {
+  id: string;
+  episodeId: string;
+  source: ChapterSource | null;
+  /** The chapters URL this was fetched from; a different URL in the feed invalidates the cache. */
+  sourceUrl: string | null;
+  chapters: Chapter[];
+  fetchedAt: number;
+  error: string | null;
 }
 
 export interface Transcript extends Base {

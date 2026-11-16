@@ -1,5 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
+import type { Chapter } from '@homecast/shared';
 import { sanitizeDescription, toText } from '../util/html.js';
+import { parseInlineChapters } from './chapters.js';
 
 export interface ParsedEpisode {
   guid: string;
@@ -11,6 +13,8 @@ export interface ParsedEpisode {
   releasedAt: number | null;
   transcriptUrl: string | null;
   transcriptType: string | null;
+  chaptersUrl: string | null;
+  inlineChapters: Chapter[] | null;
 }
 export interface ParsedFeed {
   title: string;
@@ -28,7 +32,7 @@ const parser = new XMLParser({
   parseTagValue: false,
   parseAttributeValue: false,
   processEntities: true,
-  isArray: (name) => ['item', 'entry', 'enclosure', 'podcast:transcript', 'link', 'category'].includes(name),
+  isArray: (name) => ['item', 'entry', 'enclosure', 'podcast:transcript', 'link', 'category', 'psc:chapter'].includes(name),
 });
 
 type Node = Record<string, unknown> | string | number | undefined | null;
@@ -97,6 +101,15 @@ export function parseFeed(xml: string, maxEpisodes = 5000): ParsedFeed {
   throw new Error('Not an RSS or Atom feed');
 }
 
+function inlineChapters(node: unknown): Chapter[] | null {
+  const list = (first(node) as Record<string, unknown> | undefined)?.['psc:chapter'];
+  if (!Array.isArray(list)) return null;
+  const chapters = parseInlineChapters(
+    list.map((c) => ({ start: attr(c, 'start'), title: attr(c, 'title'), href: attr(c, 'href'), image: attr(c, 'image') })),
+  );
+  return chapters.length ? chapters : null;
+}
+
 function parseRss(ch: Record<string, unknown>, max: number): ParsedFeed {
   const imageUrl =
     httpUrl(attr(ch['itunes:image'], 'href')) ?? httpUrl(txt((ch.image as Record<string, unknown> | undefined)?.url)) ?? null;
@@ -120,6 +133,8 @@ function parseRss(ch: Record<string, unknown>, max: number): ParsedFeed {
       releasedAt: parseDate(txt(it.pubDate) || txt(it['dc:date'])),
       transcriptUrl: tr ? httpUrl(attr(tr, 'url')) : null,
       transcriptType: tr ? attr(tr, 'type') || null : null,
+      chaptersUrl: httpUrl(attr(it['podcast:chapters'], 'url')),
+      inlineChapters: inlineChapters(it['psc:chapters']),
     });
   }
   return {
@@ -148,6 +163,8 @@ function parseAtom(feed: Record<string, unknown>, max: number): ParsedFeed {
       releasedAt: parseDate(txt(e.published) || txt(e.updated)),
       transcriptUrl: null,
       transcriptType: null,
+      chaptersUrl: null,
+      inlineChapters: null,
     });
   }
   const author = first(feed.author);

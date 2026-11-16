@@ -9,7 +9,7 @@ A podcast player with a self-hosted sync server. See [`SPEC.md`](SPEC.md) for th
 | **Server** (`server/`): auth, invites, feed poller, sync, discovery, OPML, transcripts (publisher + Whisper), audio proxy, usage, audit, backups, admin API | Built and tested |
 | **Admin dashboard** (`web/`, served at `/admin`): Overview, Users & invites, Feeds, Jobs, Usage, Audit log, Settings | Built |
 | `shared/`: API/sync schemas (zod), smart-playlist evaluator and test vectors | Built and tested |
-| **Player PWA** (`web/`, served at `/`): library, playback, Up Next, playlists, smart playlists, bookmarks, transcripts, Discover, downloads/offline, sync | Built |
+| **Player PWA** (`web/`, served at `/`): library, playback, Up Next, playlists, smart playlists, bookmarks, transcripts and transcript search, chapters, OPML import/export, Discover, downloads/offline, sync | Built |
 | **iOS** (`ios/`): SwiftUI app + CarPlay, local-first sync, downloads, transcripts | Built (CarPlay untested on a real head unit) |
 | **Android** (`android/`): Compose + Material 3 app with Android Auto, local-first sync, downloads, transcripts | Built (Android Auto verified on the Desktop Head Unit; not on a real head unit) |
 

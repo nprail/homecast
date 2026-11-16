@@ -4,6 +4,7 @@ import { addPodcastBody, discoverQuery, subscribeBody, type DiscoverItem } from 
 import type { Ctx } from '../context.js';
 import type { Podcast, Subscription } from '../db/types.js';
 import { makeAuth, userOf } from '../plugins/auth.js';
+import { normalizeFeedUrl } from '../services/feedParser.js';
 import { toText } from '../util/html.js';
 import { clean, now } from '../util/misc.js';
 import { HttpError, notFound } from '../util/errors.js';
@@ -89,9 +90,11 @@ export function libraryRoutes(ctx: Ctx) {
       const user = userOf(req);
       const raw = typeof req.body === 'string' ? req.body : typeof (req.body as { opml?: unknown })?.opml === 'string' ? (req.body as { opml: string }).opml : '';
       if (!raw) throw new HttpError(400, 'Send the OPML document as the request body', 'validation');
-      const urls = extractOpmlUrls(raw).slice(0, 500);
-      if (!urls.length) throw new HttpError(400, 'No feeds found in OPML', 'validation');
+      const all = extractOpmlUrls(raw);
+      const urls = all.slice(0, OPML_MAX_FEEDS);
+      if (!urls.length) throw new HttpError(400, 'No feeds found in this file. Is it an OPML export?', 'validation');
       const imported: string[] = [];
+      let alreadySubscribed = 0;
       const failed: { url: string; error: string }[] = [];
       let i = 0;
       const worker = async () => {
@@ -99,16 +102,17 @@ export function libraryRoutes(ctx: Ctx) {
           const url = urls[i++]!;
           try {
             const p = await ctx.feeds.addByUrl(user.id, url);
+            if (ctx.db.subscriptions.find({ userId: user.id, podcastId: p.id }).some((s) => !s.deleted)) alreadySubscribed++;
+            else imported.push(p.id);
             ctx.feeds.subscribe(user.id, p.id);
-            imported.push(p.id);
           } catch (e) {
             failed.push({ url: url.slice(0, 200), error: e instanceof Error ? e.message : 'failed' });
           }
         }
       };
       await Promise.all(Array.from({ length: 4 }, worker));
-      ctx.audit.log({ action: 'opml.import', actorId: user.id, ip: req.ip, detail: `${imported.length} imported, ${failed.length} failed` });
-      return { imported: imported.length, failed };
+      ctx.audit.log({ action: 'opml.import', actorId: user.id, ip: req.ip, detail: `${imported.length} imported, ${alreadySubscribed} already subscribed, ${failed.length} failed` });
+      return { imported: imported.length, alreadySubscribed, failed, skipped: all.length - urls.length };
     });
 
     app.get('/opml/export', { preHandler: authenticate }, async (req, reply) => {
@@ -143,19 +147,37 @@ export function libraryRoutes(ctx: Ctx) {
   };
 }
 
-function extractOpmlUrls(xml: string): string[] {
-  const doc = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', isArray: (n) => n === 'outline', processEntities: true }).parse(xml) as {
-    opml?: { body?: unknown };
-  };
+const OPML_MAX_FEEDS = 500;
+
+/** Feed URLs from an OPML document, at any folder depth. Attribute names are matched case-insensitively. */
+export function extractOpmlUrls(xml: string): string[] {
+  let doc: { opml?: { body?: unknown } };
+  try {
+    doc = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', isArray: (n) => n === 'outline', processEntities: true }).parse(xml) as typeof doc;
+  } catch {
+    throw new HttpError(400, 'This is not a valid OPML file', 'validation');
+  }
   const urls: string[] = [];
   const walk = (n: unknown): void => {
     if (!n || typeof n !== 'object') return;
     for (const [k, v] of Object.entries(n as Record<string, unknown>)) {
-      if (k === '@_xmlUrl' && typeof v === 'string') urls.push(toText(v, 2048));
+      if (k.toLowerCase() === '@_xmlurl' && typeof v === 'string') urls.push(toText(v, 2048));
       else if (typeof v === 'object') walk(v);
     }
   };
   walk(doc.opml?.body);
-  return [...new Set(urls.filter((u) => /^https?:\/\//i.test(u)))];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of urls) {
+    if (!/^(https?|feed|itpc|pcast):\/\//i.test(raw)) continue;
+    let key: string;
+    try {
+      key = normalizeFeedUrl(raw);
+    } catch {
+      continue;
+    }
+    if (!seen.has(key)) (seen.add(key), out.push(key));
+  }
+  return out;
 }
 

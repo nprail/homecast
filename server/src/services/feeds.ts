@@ -71,6 +71,8 @@ export class FeedService {
           createdAt: t,
           transcriptUrl: p.transcriptUrl,
           transcriptType: p.transcriptType,
+          chaptersUrl: p.chaptersUrl,
+          inlineChapters: p.inlineChapters,
         });
         created++;
       } else {
@@ -83,8 +85,12 @@ export class FeedService {
           releasedAt: p.releasedAt ?? cur.releasedAt,
           transcriptUrl: p.transcriptUrl,
           transcriptType: p.transcriptType,
+          chaptersUrl: p.chaptersUrl,
+          inlineChapters: p.inlineChapters,
         };
-        const changed = (Object.keys(next) as (keyof Episode)[]).some((k) => cur[k] !== next[k]);
+        // Chapter lists are arrays, so compare by value; `?? null` treats rows from before chapters existed as unchanged.
+        const same = (k: keyof Episode) => JSON.stringify(cur[k] ?? null) === JSON.stringify(next[k] ?? null);
+        const changed = (Object.keys(next) as (keyof Episode)[]).some((k) => !same(k));
         if (changed || cur.deleted) {
           Object.assign(cur, next, { deleted: false });
           this.db.episodes.save(cur);
@@ -247,6 +253,8 @@ export class FeedService {
         for (const e of eps) {
           const tr = this.db.transcripts.findOne({ episodeId: e.id });
           if (tr) this.db.transcripts.remove(tr);
+          const ch = this.db.episodeChapters.findOne({ episodeId: e.id });
+          if (ch) this.db.episodeChapters.remove(ch);
           this.db.episodes.remove(e);
         }
         this.db.podcasts.remove(p);

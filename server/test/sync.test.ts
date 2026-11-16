@@ -56,6 +56,23 @@ describe('library', () => {
     expect(imp.json().imported).toBe(1);
     expect(await sync(maya, 0).then((r) => r.changes.podcasts.length)).toBe(1);
   });
+
+  it('imports nested OPML, reports what happened, and tolerates odd attribute names and schemes', async () => {
+    const opml = (outlines: string) => `<?xml version="1.0"?><opml version="2.0"><head><title>x</title></head><body>${outlines}</body></opml>`;
+    const doc = opml(`<outline text="Shows"><outline type="rss" text="A" xmlurl="${origin.url}/feed.xml"/><outline type="rss" text="A again" xmlUrl="${origin.url}/feed.xml"/></outline>
+      <outline type="rss" text="Gone" xmlUrl="${origin.url}/missing.xml"/><outline type="rss" text="Bad" xmlUrl="ftp://x.test/f.xml"/>`);
+    const imp = (s: typeof maya, payload: string) => a.app.inject({ method: 'POST', url: '/api/v1/opml/import', headers: { ...bearer(s), 'content-type': 'text/x-opml' }, payload });
+    const r = (await imp(maya, doc)).json();
+    expect(r.imported).toBe(1); // the duplicate collapses; ftp is ignored
+    expect(r.alreadySubscribed).toBe(0);
+    expect(r.failed).toHaveLength(1);
+    expect(r.failed[0].url).toContain('missing.xml');
+    const again = (await imp(maya, doc)).json();
+    expect(again.imported).toBe(0);
+    expect(again.alreadySubscribed).toBe(1);
+    expect((await imp(maya, opml(`<outline text="No feed here"/>`))).statusCode).toBe(400);
+    expect((await imp(maya, 'just some text')).statusCode).toBe(400);
+  });
 });
 
 describe('discover', () => {
