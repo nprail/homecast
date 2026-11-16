@@ -34,7 +34,8 @@ Tap the bookmark button in the player to save a moment with an optional title an
 
 ## Offline
 
-- **Downloads** go through the server's authenticated audio proxy into the browser's Cache API. The audio proxy is needed because browsers cannot cache cross-origin audio without CORS headers.
+- **Streaming** uses the server's own copy when there is one (see [Episode hosting](/guides/admin#episode-hosting)). The player requests a signed link for the episode, valid for 12 hours, and renews it if it expires during playback. Otherwise it streams from the podcast's own URL. The Android and iOS apps do the same.
+- **Downloads** go through the server's authenticated audio proxy into the browser's Cache API. The audio proxy is needed because browsers cannot cache cross-origin audio without CORS headers. If the server keeps its own copy of an episode (see [Episode hosting](/guides/admin#episode-hosting)), the download comes from there.
 - Set a **storage cap** and a **Wi-Fi only** switch on the Profile page (device-local settings).
 - The service worker caches the app shell, so the player loads offline.
 

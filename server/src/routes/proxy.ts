@@ -3,11 +3,13 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../context.js';
 import { makeAuth, userOf } from '../plugins/auth.js';
+import { sendLocal } from './media.js';
 import { discardBody, safeRequest } from '../security/ssrf.js';
 import { forbidden, HttpError, notFound } from '../util/errors.js';
 import { query } from '../util/validate.js';
 
 const q = z.object({ url: z.string().url().max(4096) });
+
 const PASS_HEADERS = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified'];
 
 /**
@@ -24,6 +26,10 @@ export function proxyRoutes(ctx: Ctx) {
       if (!ep) throw notFound('Unknown audio URL');
       const podcast = ctx.db.podcasts.get(ep.podcastId);
       if (podcast?.isPrivate && user.role !== 'admin' && !ctx.db.subscriptions.find({ userId: user.id, podcastId: podcast.id }).some((s) => !s.deleted)) throw forbidden();
+
+      // A complete server-hosted copy (episode hosting) is served from disk.
+      const local = ctx.mirror.localAudio(ep);
+      if (local) return sendLocal(ctx, req, reply, local, user.id);
 
       const headers: Record<string, string> = {};
       if (typeof req.headers.range === 'string' && /^bytes=\d*-\d*(,\s*\d*-\d*)*$/.test(req.headers.range)) headers.range = req.headers.range;

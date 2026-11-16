@@ -5,6 +5,7 @@ import type { AuditService } from './services/audit.js';
 import type { AutoTranscriber } from './services/autoTranscribe.js';
 import type { BackupService } from './services/backup.js';
 import type { FeedPoller, FeedService } from './services/feeds.js';
+import type { MirrorService } from './services/mirror.js';
 import type { SessionService } from './services/sessions.js';
 import type { SettingsService } from './services/settings.js';
 import type { SyncService } from './services/sync.js';
@@ -22,6 +23,7 @@ export interface Ctx {
   poller: FeedPoller;
   transcripts: TranscriptService;
   autoTranscribe: AutoTranscriber;
+  mirror: MirrorService;
   sync: SyncService;
   backup: BackupService;
   loginGuard: LoginGuard;

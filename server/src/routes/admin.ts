@@ -301,9 +301,11 @@ export function adminRoutes(ctx: Ctx) {
 
     // ---- settings -----------------------------------------------------------------------------
     const settingsDto = () => {
-      const { registrationOpen, whisperModel, pollIntervalMinutes, autoTranscribe } = ctx.settings.get();
+      const { registrationOpen, whisperModel, pollIntervalMinutes, autoTranscribe, episodeMirror } = ctx.settings.get();
       return {
         registrationOpen, whisperModel, pollIntervalMinutes,
+        episodeMirror: { enabled: episodeMirror.enabled, maxGB: episodeMirror.maxGB },
+        episodeMirrorStatus: ctx.mirror.status(),
         autoTranscribe: { enabled: autoTranscribe.enabled, scope: autoTranscribe.scope, podcastIds: autoTranscribe.podcastIds },
         autoTranscribePending: ctx.autoTranscribe.eligible().length,
       };
@@ -314,7 +316,16 @@ export function adminRoutes(ctx: Ctx) {
       ctx.settings.update(b);
       ctx.audit.log({ actorId: userOf(req).id, action: 'settings.update', ip: req.ip, detail: Object.keys(b).join(', ') });
       if (b.autoTranscribe) ctx.autoTranscribe.tick();
+      if (b.episodeMirror?.enabled) void ctx.mirror.kick();
       return settingsDto();
+    });
+
+    // Removes every hosted copy. Only allowed while hosting is off, so nothing is re-downloaded at once.
+    app.delete('/admin/mirror', async (req) => {
+      if (ctx.settings.get().episodeMirror.enabled) throw conflict('Turn off episode hosting before deleting the hosted copies');
+      const removed = ctx.mirror.deleteAll();
+      ctx.audit.log({ actorId: userOf(req).id, action: 'mirror.delete', ip: req.ip, detail: `${removed} copies` });
+      return { removed };
     });
   };
 }

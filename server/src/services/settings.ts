@@ -14,6 +14,7 @@ export class SettingsService {
         whisperModel: config.whisperModel,
         pollIntervalMinutes: 30,
         autoTranscribe: { enabled: false, scope: 'new', podcastIds: null, enabledAt: 0 },
+        episodeMirror: { enabled: false, maxGB: null },
         lastBackupAt: null,
         lastBackupBytes: null,
       });
@@ -23,15 +24,22 @@ export class SettingsService {
     const d = this.db.serverSettings.find()[0]!;
     // Databases created before auto-transcribe existed.
     d.autoTranscribe ??= { enabled: false, scope: 'new', podcastIds: null, enabledAt: 0 };
+    d.episodeMirror ??= { enabled: false, maxGB: null };
     return d;
   }
   get(): ServerSettings {
     return this.doc;
   }
-  update(patch: Partial<Pick<ServerSettings, 'registrationOpen' | 'whisperModel' | 'pollIntervalMinutes'>> & { autoTranscribe?: { enabled: boolean; scope: 'new' | 'all'; podcastIds: string[] | null } }): ServerSettings {
+  update(
+    patch: Partial<Pick<ServerSettings, 'registrationOpen' | 'whisperModel' | 'pollIntervalMinutes'>> & {
+      autoTranscribe?: { enabled: boolean; scope: 'new' | 'all'; podcastIds: string[] | null };
+      episodeMirror?: { enabled: boolean; maxGB: number | null };
+    },
+  ): ServerSettings {
     const d = this.doc;
-    const { autoTranscribe, ...rest } = patch;
+    const { autoTranscribe, episodeMirror, ...rest } = patch;
     Object.assign(d, rest);
+    if (episodeMirror) d.episodeMirror = { enabled: episodeMirror.enabled, maxGB: episodeMirror.maxGB };
     if (autoTranscribe) {
       const prev = d.autoTranscribe;
       // "New episodes" counts from the moment it is switched on (or the scope is narrowed to new).

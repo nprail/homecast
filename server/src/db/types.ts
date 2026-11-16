@@ -197,8 +197,26 @@ export interface ServerSettings {
   whisperModel: string;
   pollIntervalMinutes: number;
   autoTranscribe: { enabled: boolean; scope: 'new' | 'all'; podcastIds: string[] | null; enabledAt: number };
+  episodeMirror: { enabled: boolean; maxGB: number | null };
   lastBackupAt: number | null;
   lastBackupBytes: number | null;
+}
+
+/** A server-hosted copy of an episode's audio. `id` is the episode id. */
+export interface EpisodeMirror {
+  id: string;
+  episodeId: string;
+  status: 'ready' | 'failed';
+  /** File name inside DATA_DIR/media. */
+  file: string | null;
+  bytes: number;
+  mimeType: string;
+  /** The audio URL the copy was made from; if the feed changes it, the copy is replaced. */
+  sourceUrl: string;
+  attempts: number;
+  nextAttemptAt: number;
+  error: string | null;
+  at: number;
 }
 
 export interface Meta {

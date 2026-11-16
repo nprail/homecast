@@ -3,6 +3,7 @@ import type { DownloadManager } from './downloads';
 import type { LocalData } from './data';
 import type { EpisodeRec, PodcastRec } from './db';
 import { Store } from './store';
+import { signedStreamUrl } from './stream';
 
 export interface PlayContext {
   /** Shown as "Playing from". */
@@ -51,6 +52,10 @@ export class Player {
   private sleepTimer: ReturnType<typeof setInterval> | null = null;
   private loadToken = 0;
   private pendingSeekMs: number | null = null;
+  /** True while the audio element plays a signed server URL (so it can be renewed if it expires). */
+  private signed = false;
+  private recovering = false;
+  private recoveries = 0;
   private disposers: (() => void)[] = [];
 
   constructor(
@@ -80,6 +85,8 @@ export class Player {
     on('canplay', () => this.state.set({ buffering: false }));
     on('ended', () => void this.onEnded());
     on('error', () => {
+      // A signed link can expire mid-listen: renew it and carry on from the same place.
+      if (this.signed) return void this.recover();
       if (this.state.get().episodeId) this.state.set({ error: 'Could not play this episode. Check your connection.', buffering: false, playing: false });
     });
     this.setupMediaSession();
@@ -120,6 +127,9 @@ export class Player {
     const settings = await this.data.getSettings();
     const local = await this.downloads.localUrl(episodeId);
     if (token !== this.loadToken) return;
+    // Otherwise stream from the server's hosted copy when there is one, through a signed URL.
+    const hosted = local ? null : await signedStreamUrl(episodeId);
+    if (token !== this.loadToken) return;
     const speed = resolveSpeed(settings, ep.podcastId);
     const resumeMs = st.status === 'played' ? 0 : st.positionMs;
     const context = opts.context ?? this.state.get().context;
@@ -130,7 +140,9 @@ export class Player {
     void this.data.db.setKV('player.episodeId', episodeId);
     void this.data.db.setKV('player.context', context);
     const a = this.audio;
-    a.src = local ?? ep.audioUrl;
+    a.src = local ?? hosted ?? ep.audioUrl;
+    this.signed = !local && !!hosted;
+    this.recoveries = 0;
     a.playbackRate = speed;
     a.volume = 1;
     this.pendingSeekMs = resumeMs > 0 ? resumeMs : null;
@@ -142,6 +154,27 @@ export class Player {
       } catch (e) {
         if ((e as Error).name !== 'AbortError') this.state.set({ error: 'Playback was blocked. Press play to start.', playing: false });
       }
+    }
+  }
+
+  /** Replace an expired or failed signed URL with a fresh one, resuming where playback stopped. */
+  private async recover() {
+    const { episodeId, episode } = this.state.get();
+    if (!episodeId || !episode || this.recovering) return;
+    this.recovering = true;
+    try {
+      const wasPlaying = !this.audio.paused;
+      const at = Math.round(this.audio.currentTime * 1000);
+      // After two failed renewals give up on the server's copy and use the podcast's own URL.
+      this.recoveries += 1;
+      const fresh = this.recoveries <= 2 ? await signedStreamUrl(episodeId) : null;
+      this.signed = !!fresh;
+      this.pendingSeekMs = at;
+      this.audio.src = fresh ?? episode.audioUrl;
+      this.audio.load();
+      if (wasPlaying) await this.audio.play().catch(() => undefined);
+    } finally {
+      this.recovering = false;
     }
   }
 

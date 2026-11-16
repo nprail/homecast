@@ -56,6 +56,12 @@ export const patchSettingsBody = z.object({
       podcastIds: z.array(z.string().min(8).max(64)).max(1000).nullable(),
     })
     .optional(),
+  episodeMirror: z
+    .object({
+      enabled: z.boolean(),
+      maxGB: z.number().positive().max(100_000).nullable(),
+    })
+    .optional(),
 });
 
 export interface UserDto {

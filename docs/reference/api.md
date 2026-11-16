@@ -41,7 +41,20 @@ All routes live under `/api/v1` and speak JSON. Authenticated routes need `Autho
 | `POST /episodes/:id/transcript` | request a transcript (deduplicated) |
 | `GET /episodes/:id/transcript` | the transcript, or `202` while it is being generated |
 | `GET /jobs/:id` | job status (the requester, attached users and admins) |
-| `GET /proxy/audio?url=` | authenticated audio proxy, web app only; supports `Range` |
+| `GET /proxy/audio?url=` | authenticated audio proxy, web app only; supports `Range`. Serves the server's own copy when episode hosting has one |
+| `GET /episodes/:id/stream` | a signed, short-lived URL (12 hours) to stream the server's copy: `{ url, expiresAt }`, or `url: null` when the episode isn't hosted. Needs `Authorization` |
+| `GET /media/:id?u=&exp=&sig=` | streams a hosted copy with `Range` support using a signed URL, so an `<audio>` element can play it without a header. No `Authorization`; the signature is bound to the episode, the user and the expiry |
+
+### Streaming hosted episodes (client authors)
+
+When the server keeps its own copy of an episode (episode hosting), clients should stream that copy instead of the podcast's URL:
+
+1. Before playing an episode that isn't downloaded, call `GET /episodes/:id/stream` (with `Authorization`) and give it a short timeout, about 4 seconds.
+2. If the response has a non-null `url`, resolve it against the server address and play it directly. It needs no `Authorization` header, so `AVPlayer` and ExoPlayer can use it as is, with range requests.
+3. If `url` is `null`, the request fails or it is too slow, play the episode's own `audioUrl`.
+4. If playback of a signed URL fails (the link expired or the copy was deleted), request a fresh one and resume from the same position. After two failed renewals, fall back to `audioUrl`.
+
+The web player and both native apps follow this.
 
 ## Admin
 
@@ -57,7 +70,8 @@ All require the `admin` role.
 | `GET /admin/jobs`, `POST /admin/jobs/:id/retry`, `POST /admin/jobs/:id/cancel` | transcript jobs |
 | `GET /admin/usage?days=&format=` | usage; `format=csv` for the export |
 | `GET /admin/audit` | audit log |
-| `GET/PATCH /admin/settings`, `POST /admin/backup` | settings and backups |
+| `GET/PATCH /admin/settings`, `POST /admin/backup` | settings (including `episodeMirror`) and backups |
+| `DELETE /admin/mirror` | delete all hosted episode copies; only allowed while episode hosting is off |
 
 ## Operations
 

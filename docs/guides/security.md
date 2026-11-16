@@ -33,6 +33,8 @@ The audio proxy additionally requires authentication, only proxies URLs belongin
 - JSON-schema validation on every route, request body size limits, strict CORS, `helmet` headers and a Content-Security-Policy.
 - Feed HTML is sanitized on the server, and sanitized again before the web app renders it.
 - Private feeds can only be added with their feed URL; their ids are never accepted by Discover or sync.
+- Streaming a hosted copy uses **signed URLs**: an HMAC over the episode, the user and an expiry (12 hours), keyed separately from the login secret. The server re-checks the account, the feed's visibility and the expiry on every range request. Anyone who obtains a signed link can hear that episode until it expires, so treat such links like session data: they appear in the player and in server access logs for their lifetime.
+- Episode hosting (off by default) keeps copies of audio on the server. Copies are served only through the authenticated proxy, and only to users who may see the episode, so a private feed's copy is never visible to other users.
 - An audit log records sign-ins, failed sign-ins and admin actions.
 - The Docker image runs as non-root with a read-only filesystem; there are no secrets in the image.
 

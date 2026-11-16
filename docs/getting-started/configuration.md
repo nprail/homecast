@@ -32,4 +32,5 @@ These live in the database and apply immediately (**Admin → Settings**):
 - **Allow new sign-ups**: turn off to stop accepting invite codes entirely.
 - **Poll interval**: how often subscribed feeds are checked (5 to 1440 minutes).
 - **Whisper model** and **auto-transcribe** (see [Transcripts](/guides/transcripts)).
+- **Episode hosting**: keep copies of episode audio on the server, with an optional storage cap (see [Admin dashboard](/guides/admin#episode-hosting)). Off by default.
 - **Back up now**.

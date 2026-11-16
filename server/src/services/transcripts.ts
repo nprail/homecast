@@ -67,6 +67,8 @@ export function resolveModelPath(config: Config, model: string): string {
 export const SYSTEM_USER = 'system';
 
 export class TranscriptService {
+  /** Set by the app: the server's hosted audio copy for an episode, if there is one. */
+  localAudio: ((episodeId: string) => { path: string } | null) | null = null;
   /** Fired after each job finishes (auto-transcribe tops up the queue from here). */
   onJobFinished: (() => void) | null = null;
   private active = new Map<string, AbortController>();
@@ -247,17 +249,25 @@ export class TranscriptService {
       const modelPath = resolveModelPath(this.config, model);
       if (!existsSync(modelPath)) await this.fetchModel(model, modelPath, ctl.signal, job);
 
-      this.setStage(job, 'Downloading audio', 0);
-      const audio = path.join(dir, 'audio.bin');
-      let bytes: number;
-      try {
-        bytes = await safeDownloadToFile(episode.audioUrl, audio, { maxBytes: AUDIO_MAX_BYTES, timeoutMs: DOWNLOAD_TIMEOUT_MS, signal: ctl.signal, allowPrivate: this.config.allowPrivateNetworks });
-      } catch (e) {
-        if (ctl.signal.aborted) throw e;
-        const msg = e instanceof Error ? e.message : 'download failed';
-        throw new Error(/timeout|UND_ERR_(HEADERS|BODY|CONNECT)/i.test(msg) ? `Audio download timed out after ${DOWNLOAD_TIMEOUT_MS / 1000} s` : `Audio download failed: ${msg}`);
+      // Prefer the server's hosted copy of the episode (no download, and no feed traffic).
+      const hosted = this.localAudio?.(episode.id) ?? null;
+      let audio: string;
+      if (hosted) {
+        this.setStage(job, 'Using hosted audio', 0);
+        audio = hosted.path;
+      } else {
+        this.setStage(job, 'Downloading audio', 0);
+        audio = path.join(dir, 'audio.bin');
+        let bytes: number;
+        try {
+          bytes = await safeDownloadToFile(episode.audioUrl, audio, { maxBytes: AUDIO_MAX_BYTES, timeoutMs: DOWNLOAD_TIMEOUT_MS, signal: ctl.signal, allowPrivate: this.config.allowPrivateNetworks });
+        } catch (e) {
+          if (ctl.signal.aborted) throw e;
+          const msg = e instanceof Error ? e.message : 'download failed';
+          throw new Error(/timeout|UND_ERR_(HEADERS|BODY|CONNECT)/i.test(msg) ? `Audio download timed out after ${DOWNLOAD_TIMEOUT_MS / 1000} s` : `Audio download failed: ${msg}`);
+        }
+        this.usage.add(job.requestedBy, 'transcribeBytes', bytes);
       }
-      this.usage.add(job.requestedBy, 'transcribeBytes', bytes);
 
       this.setStage(job, 'Converting audio', 0);
       const wav = path.join(dir, 'audio.wav');

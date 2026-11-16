@@ -155,6 +155,7 @@ The transcript tests run the real worker pipeline against stand-in `ffmpeg`/`whi
 - Feeds with no subscribers are not polled; "Remove orphans" deletes them and their episodes.
 - Private feed URLs (and anything with credentials) are redacted in the admin Feeds list.
 - Access tokens are kept in memory by the dashboard; a page reload restores the session from the refresh cookie.
+- **Episode hosting** (off by default): optionally keeps a server-side copy of every episode of subscribed podcasts, with an optional storage cap; the audio proxy and transcripts use the copy. See the admin guide.
 - Request an Apple CarPlay entitlement early (spec §3.12); nothing here depends on it.
 
 ## License and credits

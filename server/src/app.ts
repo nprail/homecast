@@ -11,6 +11,7 @@ import { Database } from './db/index.js';
 import { LoginGuard } from './security/loginGuard.js';
 import { AuditService } from './services/audit.js';
 import { AutoTranscriber } from './services/autoTranscribe.js';
+import { MirrorService } from './services/mirror.js';
 import { BackupService } from './services/backup.js';
 import { FeedPoller, FeedService } from './services/feeds.js';
 import { Maintenance } from './services/maintenance.js';
@@ -23,6 +24,7 @@ import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { healthRoutes } from './routes/health.js';
 import { libraryRoutes } from './routes/library.js';
+import { mediaRoutes } from './routes/media.js';
 import { proxyRoutes } from './routes/proxy.js';
 import { syncRoutes } from './routes/sync.js';
 import { transcriptRoutes } from './routes/transcripts.js';
@@ -55,10 +57,11 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
   const feeds = new FeedService(db, config, usage, settings);
   const transcripts = new TranscriptService(db, config, usage, settings, audit, log);
   const autoTranscribe = new AutoTranscriber(db, settings, transcripts, feeds);
+  const mirror = new MirrorService(db, config, settings, log);
   const backup = new BackupService(db, config, settings, audit);
   const sync = new SyncService(db);
   const ctx: Ctx = {
-    config, db, sessions, audit, usage, settings, feeds, transcripts, autoTranscribe, sync, backup,
+    config, db, sessions, audit, usage, settings, feeds, transcripts, autoTranscribe, mirror, sync, backup,
     poller: new FeedPoller(db, feeds, log),
     loginGuard: new LoginGuard(),
     bootstrap: { token: null },
@@ -67,8 +70,12 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
   if (db.users.count() === 0) {
     ctx.bootstrap.token = randomBytes(24).toString('base64url');
   }
-  feeds.onNewEpisodes = () => autoTranscribe.tick();
+  feeds.onNewEpisodes = () => {
+    autoTranscribe.tick();
+    void mirror.kick();
+  };
   transcripts.onJobFinished = () => autoTranscribe.tick();
+  transcripts.localAudio = (id) => mirror.localAudioById(id);
   const maintenance = new Maintenance(db, backup, sync, usage, audit, sessions, transcripts, ctx.loginGuard, log);
 
   const isHttps = config.publicUrl.startsWith('https://');
@@ -123,6 +130,7 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
       await api.register(syncRoutes(ctx));
       await api.register(transcriptRoutes(ctx));
       await api.register(proxyRoutes(ctx));
+      await api.register(mediaRoutes(ctx));
       await api.register(adminRoutes(ctx));
     },
     { prefix: '/api/v1' },
@@ -156,6 +164,7 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
     maintenance.stop();
     transcripts.stop();
     autoTranscribe.stop();
+    mirror.stop();
     usage.stop();
     await app.close();
     await db.save();
@@ -170,5 +179,6 @@ export function startWorkers({ ctx, maintenance }: App): void {
   ctx.poller.start();
   ctx.transcripts.start();
   ctx.autoTranscribe.start();
+  ctx.mirror.start();
   maintenance.start();
 }

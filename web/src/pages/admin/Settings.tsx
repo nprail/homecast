@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import type { AdminFeed, AdminOverview, AdminSettings, AutoTranscribeSettings } from '@homecast/shared';
+import type { AdminFeed, AdminOverview, AdminSettings, AutoTranscribeSettings, EpisodeMirrorSettings, EpisodeMirrorStatus } from '@homecast/shared';
 import { Button, Card, ErrorNote, Field, inputCls, Loading, PageHeader, Switch } from '../../components/ui';
-import { fmtInt } from '../../lib/format';
-import { get, patch, post } from '../../lib/api';
-import { fmtBytes, fmtWhen } from '../../lib/format';
+import { del, get, patch, post } from '../../lib/api';
+import { fmtBytes, fmtInt, fmtWhen } from '../../lib/format';
 
 const MODELS = [
   { value: 'base.en-q5_1', label: 'base.en (q5_1): default, about 60 MB' },
@@ -83,6 +82,83 @@ function AutoTranscribe({ value, onChange, pending, saved }: { value: AutoTransc
   );
 }
 
+const STOP_TEXT = {
+  cap: 'Paused: the storage cap is reached. Raise the cap or delete copies to continue.',
+  disk: "Paused: less than 5 GB is free on the server's data disk.",
+} as const;
+
+function EpisodeHosting({
+  value,
+  status,
+  savedEnabled,
+  onChange,
+  onDeleted,
+}: {
+  value: EpisodeMirrorSettings;
+  status: EpisodeMirrorStatus | undefined;
+  savedEnabled: boolean;
+  onChange: (v: EpisodeMirrorSettings) => void;
+  onDeleted: () => void;
+}) {
+  const remove = useMutation({
+    mutationFn: () => del<{ removed: number }>('/admin/mirror'),
+    onSuccess: onDeleted,
+  });
+  const stop = status?.stoppedReason ? STOP_TEXT[status.stoppedReason] : null;
+  return (
+    <Card title="Episode hosting">
+      <div className="flex flex-col gap-4 px-5 py-4">
+        <div className="flex items-center justify-between gap-6">
+          <div>
+            <div className="font-medium">Keep copies of episodes on this server</div>
+            <div className="text-[13px] text-muted">
+              Off by default. When on, the server downloads every episode of the podcasts people subscribe to, one at a time, newest first, and serves them from its own disk. This uses server disk space and bandwidth.
+            </div>
+          </div>
+          <Switch label="Keep copies of episodes on this server" checked={value.enabled} onChange={(enabled) => onChange({ ...value, enabled })} />
+        </div>
+        <Field label="Storage cap (GB)" hint="Leave empty for no cap. Copying also stops while less than 5 GB is free on the data disk.">
+          {(id) => (
+            <input
+              id={id}
+              type="number"
+              min={0.1}
+              step={0.5}
+              placeholder="No cap"
+              value={value.maxGB ?? ''}
+              onChange={(e) => onChange({ ...value, maxGB: e.target.value === '' ? null : Number(e.target.value) })}
+              className={`${inputCls} max-w-[200px]`}
+            />
+          )}
+        </Field>
+        {status && (
+          <dl className="m-0 grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+            <div><dt className="text-[13px] text-muted">Hosted</dt><dd className="m-0 font-medium tnum">{fmtInt(status.hosted)}</dd></div>
+            <div><dt className="text-[13px] text-muted">Waiting</dt><dd className="m-0 font-medium tnum">{fmtInt(status.pending)}</dd></div>
+            <div><dt className="text-[13px] text-muted">Failed</dt><dd className={`m-0 font-medium tnum ${status.failed ? 'text-bad-fg' : ''}`}>{fmtInt(status.failed)}</dd></div>
+            <div><dt className="text-[13px] text-muted">Used</dt><dd className="m-0 font-medium tnum">{fmtBytes(status.bytes)}{status.freeBytes !== null ? ` · ${fmtBytes(status.freeBytes, 0)} free` : ''}</dd></div>
+          </dl>
+        )}
+        {status?.lastError && <div className="text-[13px] text-bad-fg">Last error: {status.lastError}</div>}
+        {value.enabled && stop && <div className="text-[13px] text-warn-fg" role="status">{stop}</div>}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-2 pt-4">
+          <div className="text-[13px] text-muted">{savedEnabled ? 'Turn hosting off before deleting copies.' : 'Deletes every copy from the server. They are downloaded again if hosting is turned back on.'}</div>
+          <Button
+            variant="danger"
+            disabled={savedEnabled || remove.isPending || !status?.hosted}
+            onClick={() => {
+              if (window.confirm(`Delete all ${status?.hosted ?? 0} hosted episode copies from the server?`)) remove.mutate();
+            }}
+          >
+            {remove.isPending ? 'Deleting…' : 'Delete hosted copies'}
+          </Button>
+        </div>
+        <ErrorNote error={remove.error} />
+      </div>
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['admin', 'settings'], queryFn: () => get<AdminSettings>('/admin/settings') });
@@ -94,7 +170,7 @@ export function SettingsPage() {
   }, [q.data]);
 
   const save = useMutation({
-    mutationFn: ({ autoTranscribePending: _p, ...s }: AdminSettings) => patch<AdminSettings>('/admin/settings', s),
+    mutationFn: ({ autoTranscribePending: _p, episodeMirrorStatus: _m, ...s }: AdminSettings) => patch<AdminSettings>('/admin/settings', s),
     onSuccess: (s) => {
       qc.setQueryData(['admin', 'settings'], s);
       setSaved(true);
@@ -102,7 +178,7 @@ export function SettingsPage() {
     },
   });
   const backup = useMutation({ mutationFn: () => post('/admin/backup'), onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'overview'] }) });
-  const norm = (f: AdminSettings | null | undefined) => JSON.stringify(f && { ...f, autoTranscribePending: 0 });
+  const norm = (f: AdminSettings | null | undefined) => JSON.stringify(f && { ...f, autoTranscribePending: 0, episodeMirrorStatus: null });
   const dirty = !!form && !!q.data && norm(form) !== norm(q.data);
   const custom = form && !MODELS.some((m) => m.value === form.whisperModel);
   const b = overview.data?.backup;
@@ -147,6 +223,13 @@ export function SettingsPage() {
             </div>
           </Card>
           <AutoTranscribe value={form.autoTranscribe} onChange={(autoTranscribe) => setForm({ ...form, autoTranscribe })} pending={q.data?.autoTranscribePending ?? 0} saved={!dirty} />
+          <EpisodeHosting
+            value={form.episodeMirror}
+            status={q.data?.episodeMirrorStatus}
+            savedEnabled={!!q.data?.episodeMirror.enabled}
+            onChange={(episodeMirror) => setForm({ ...form, episodeMirror })}
+            onDeleted={() => void qc.invalidateQueries({ queryKey: ['admin', 'settings'] })}
+          />
           <div className="flex items-center gap-3">
             <Button variant="primary" disabled={!dirty || save.isPending} onClick={() => form && save.mutate(form)}>
               {save.isPending ? 'Saving…' : 'Save changes'}

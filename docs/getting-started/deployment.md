@@ -78,6 +78,7 @@ Everything lives in `DATA_DIR`:
 | `backups/` | daily snapshots at 03:00 server time, newest 14 kept |
 | `jwt.secret` | generated signing secret (mode 0600) |
 | `models/` | Whisper models (downloaded on first use) |
+| `media/` | hosted episode copies, if episode hosting is on (not included in the database backup) |
 
 Back up the volume, or use the **Back up now** button and copy `backups/`. Each user can also export their own data from the player's Profile page.
 

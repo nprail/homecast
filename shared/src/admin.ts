@@ -121,6 +121,28 @@ export interface AutoTranscribeSettings {
   /** `null` = every podcast with a subscriber; otherwise only these podcast ids. */
   podcastIds: string[] | null;
 }
+/** Keep copies of episodes on this server. Off by default. */
+export interface EpisodeMirrorSettings {
+  enabled: boolean;
+  /** Upper bound for the hosted copies, in gigabytes. `null` = no cap (the disk-free reserve still applies). */
+  maxGB: number | null;
+}
+export interface EpisodeMirrorStatus {
+  /** Episodes with a complete local copy. */
+  hosted: number;
+  /** Episodes still waiting to be copied (subscribed podcasts only). */
+  pending: number;
+  /** Episodes whose last copy attempt failed (they are retried with backoff). */
+  failed: number;
+  /** Bytes used by hosted copies. */
+  bytes: number;
+  /** Free space on the data disk, or null if it can't be read. */
+  freeBytes: number | null;
+  /** Most recent error, if any. */
+  lastError: string | null;
+  /** Set when copying stopped because the storage cap or the disk-free reserve was reached. */
+  stoppedReason: 'cap' | 'disk' | null;
+}
 export interface AdminSettings {
   registrationOpen: boolean;
   whisperModel: string;
@@ -128,4 +150,6 @@ export interface AdminSettings {
   autoTranscribe: AutoTranscribeSettings;
   /** Episodes currently eligible for auto-transcription but not yet queued or done. */
   autoTranscribePending: number;
+  episodeMirror: EpisodeMirrorSettings;
+  episodeMirrorStatus: EpisodeMirrorStatus;
 }

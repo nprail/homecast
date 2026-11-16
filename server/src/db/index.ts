@@ -3,7 +3,7 @@ import path from 'node:path';
 import Loki from 'lokijs';
 import type {
   AuditLogEntry, Bookmark, Episode, EpisodeState, Invite, Job, Meta, Playlist, Podcast, RefreshToken, ResetToken,
-  ServerSettings, SmartPlaylist, Subscription, Transcript, UsageStat, User, UserSettings,
+  EpisodeMirror, ServerSettings, SmartPlaylist, Subscription, Transcript, UsageStat, User, UserSettings,
 } from './types.js';
 import { clean, uuid } from '../util/misc.js';
 
@@ -84,6 +84,7 @@ export class Database {
   readonly usageStats: Repo<UsageStat>;
   readonly auditLog: Repo<AuditLogEntry>;
   readonly serverSettings: Repo<ServerSettings>;
+  readonly episodeMirrors: Repo<EpisodeMirror>;
   private meta!: Collection<Meta>;
   private metaDoc!: Meta & LokiObj;
   readonly file: string;
@@ -114,6 +115,7 @@ export class Database {
     this.usageStats = new Repo(col<UsageStat>('usageStats', ['key'], ['userId', 'day']), null);
     this.auditLog = new Repo(col<AuditLogEntry>('auditLog', [], ['at']), null);
     this.serverSettings = new Repo(col<ServerSettings>('serverSettings', [], []), null);
+    this.episodeMirrors = new Repo(col<EpisodeMirror>('episodeMirrors', [], ['status']), null);
 
     this.metaDoc = (this.meta.findOne({ id: 'rev' }) as (Meta & LokiObj) | null) ?? (this.meta.insert({ id: 'rev', rev: 0 }) as Meta & LokiObj);
   }
