@@ -33,7 +33,9 @@ describe('bootstrap and registration', () => {
     const reuse = await a.app.inject({ method: 'POST', url: '/api/v1/auth/register', payload: { username: 'eli', password: 'longenoughpass', inviteCode: inv.code } });
     expect(reuse.statusCode).toBe(400);
     const inv2 = (await a.app.inject({ method: 'POST', url: '/api/v1/admin/invites', headers: bearer(admin), payload: {} })).json();
-    a.ctx.db.invites.get(inv2.invite.id)!.expiresAt = Date.now() - 1000;
+    const stale = a.ctx.db.invites.get(inv2.invite.id)!;
+    stale.expiresAt = Date.now() - 1000;
+    a.ctx.db.invites.save(stale);
     const expired = await a.app.inject({ method: 'POST', url: '/api/v1/auth/register', payload: { username: 'eli', password: 'longenoughpass', inviteCode: inv2.code } });
     expect(expired.statusCode).toBe(400);
     const list = (await a.app.inject({ method: 'GET', url: '/api/v1/admin/invites', headers: bearer(admin) })).json().invites;

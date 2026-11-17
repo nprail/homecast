@@ -28,7 +28,8 @@ export function adminRoutes(ctx: Ctx) {
   const nameOf = (id: string | null): string => (id === SYSTEM_USER ? 'Auto-transcribe' : id ? (db.users.get(id)?.username ?? 'Deleted user') : 'System');
 
   // ---- DTO builders ---------------------------------------------------------------------------
-  const feedDto = (p: Podcast): AdminFeed => {
+  /** A feed's row without its episode count. `subs` (from `subscriberCounts`) saves a query per feed when listing many. */
+  const feedBase = (p: Podcast, subs?: Map<string, number>): AdminFeed => {
     let status: AdminFeed['status'] = 'ok';
     let statusLabel = 'OK';
     if (p.fetchError) {
@@ -43,10 +44,11 @@ export function adminRoutes(ctx: Ctx) {
     }
     return {
       id: p.id, title: p.title, feedUrl: redactFeedUrl(p.feedUrl, p.isPrivate), isPrivate: p.isPrivate, hiddenFromDiscover: p.hiddenFromDiscover,
-      subscribers: ctx.feeds.subscriberCount(p.id), lastFetchedAt: p.lastFetchedAt, lastFetchMs: p.lastFetchMs, fetchError: p.fetchError,
-      status, statusLabel, episodeCount: db.episodes.count({ podcastId: p.id }),
+      subscribers: subs ? (subs.get(p.id) ?? 0) : ctx.feeds.subscriberCount(p.id), lastFetchedAt: p.lastFetchedAt, lastFetchMs: p.lastFetchMs, fetchError: p.fetchError,
+      status, statusLabel, episodeCount: 0,
     };
   };
+  const feedDto = (p: Podcast, subs?: Map<string, number>): AdminFeed => ({ ...feedBase(p, subs), episodeCount: db.episodes.count({ podcastId: p.id }) });
 
   const userDto = (u: User): AdminUser => ({
     id: u.id, username: u.username, role: u.role, disabled: u.disabled, createdAt: u.createdAt, lastActiveAt: u.lastActiveAt,
@@ -90,11 +92,12 @@ export function adminRoutes(ctx: Ctx) {
       byUser.set(r.userId, u);
     }
     const list = [...daily.values()];
+    const subscribers = ctx.feeds.subscriberCounts();
     const totals = list.reduce((a, d) => ({ proxyBytes: a.proxyBytes + d.proxyBytes, feedBytes: a.feedBytes + d.feedBytes, transcribeBytes: a.transcribeBytes + d.transcribeBytes, transcriptMinutes: a.transcriptMinutes + d.transcriptMinutes }), { proxyBytes: 0, feedBytes: 0, transcribeBytes: 0, transcriptMinutes: 0 });
     const total = (u: UsageUser) => u.proxyBytes + u.feedBytes + u.transcribeBytes;
     return {
       days, from, to: dayKeys[dayKeys.length - 1]!,
-      feedCount: db.podcasts.where((p) => !p.deleted && ctx.feeds.subscriberCount(p.id) > 0).length,
+      feedCount: db.podcasts.where((p) => !p.deleted && (subscribers.get(p.id) ?? 0) > 0).length,
       pollIntervalMinutes: ctx.settings.get().pollIntervalMinutes, whisperModel: ctx.settings.get().whisperModel,
       totals, daily: list, byUser: [...byUser.values()].sort((a, b) => total(b) - total(a)),
     };
@@ -107,17 +110,18 @@ export function adminRoutes(ctx: Ctx) {
     app.get('/admin/overview', async (): Promise<AdminOverview> => {
       const t = now();
       const feeds = db.podcasts.where((p) => !p.deleted);
-      const withCount = feeds.map((p) => ({ p, n: ctx.feeds.subscriberCount(p.id) }));
+      const subs = ctx.feeds.subscriberCounts();
+      const withCount = feeds.map((p) => ({ p, n: subs.get(p.id) ?? 0 }));
       const info = ctx.backup.info();
       return {
         version: ctx.config.version,
         uptimeSec: Math.round((t - ctx.startedAt) / 1000),
         users: { total: db.users.count(), activeToday: db.users.where((u) => (u.lastActiveAt ?? 0) >= startOfToday()).length },
         podcasts: { total: feeds.length, withErrors: feeds.filter((p) => p.fetchError).length },
-        episodes: { total: db.episodes.count(), last24h: db.episodes.where((e) => e.createdAt > t - DAY).length },
+        episodes: { total: db.episodes.count(), last24h: db.episodes.count({ createdAt: { $gt: t - DAY } }) },
         database: { bytes: db.fileSize(), diskFreeBytes: ctx.backup.diskFreeBytes() },
         backup: info,
-        feedHealth: withCount.sort((a, b) => b.n - a.n || a.p.title.localeCompare(b.p.title)).slice(0, 5).map((x) => feedDto(x.p)),
+        feedHealth: withCount.sort((a, b) => b.n - a.n || a.p.title.localeCompare(b.p.title)).slice(0, 5).map((x) => feedDto(x.p, subs)),
         recentActivity: db.auditLog.find().sort((a, b) => b.at - a.at).slice(0, 6).map(auditDto),
       };
     });
@@ -212,11 +216,14 @@ export function adminRoutes(ctx: Ctx) {
     app.get('/admin/feeds', async (req) => {
       const q = query(req, z.object({ q: z.string().max(100).optional(), status: z.enum(['all', 'errors']).default('all'), limit: z.coerce.number().int().min(1).max(500).default(100), offset: z.coerce.number().int().min(0).default(0) }));
       const needle = q.q?.toLowerCase();
-      let list = db.podcasts.where((p) => !p.deleted).map(feedDto);
+      const subs = ctx.feeds.subscriberCounts();
+      let list = db.podcasts.where((p) => !p.deleted).map((p) => feedBase(p, subs));
       if (needle) list = list.filter((f) => f.title.toLowerCase().includes(needle));
       if (q.status === 'errors') list = list.filter((f) => f.status === 'error');
       list.sort((a, b) => b.subscribers - a.subscribers || a.title.localeCompare(b.title));
-      return { total: list.length, orphans: list.filter((f) => f.subscribers === 0).length, feeds: list.slice(q.offset, q.offset + q.limit) };
+      // Episode counts are one query each, so only the page that is returned gets them.
+      const page = list.slice(q.offset, q.offset + q.limit).map((f) => ({ ...f, episodeCount: db.episodes.count({ podcastId: f.id }) }));
+      return { total: list.length, orphans: list.filter((f) => f.subscribers === 0).length, feeds: page };
     });
 
     app.post<{ Params: { id: string } }>('/admin/feeds/:id/refresh', async (req) => {

@@ -74,8 +74,9 @@ Everything lives in `DATA_DIR`:
 
 | Path | Contents |
 |---|---|
-| `homecast.db.json` | the LokiJS database (autosaved every 5 s) |
-| `backups/` | daily snapshots at 03:00 server time, newest 14 kept |
+| `homecast.db.json` | the default database (LokiJS), saved every 5 s while anything changes |
+| `homecast.db.sqlite` | the database when `DB_ENGINE=sqlite` (with `-wal` and `-shm` files next to it while the server runs) |
+| `backups/` | daily snapshots at 03:00 server time, newest 14 kept (`.json` or `.sqlite` to match the engine) |
 | `jwt.secret` | generated signing secret (mode 0600) |
 | `models/` | Whisper models (downloaded on first use) |
 | `media/` | hosted episode copies, if episode hosting is on (not included in the database backup) |

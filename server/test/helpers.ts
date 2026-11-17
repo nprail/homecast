@@ -10,7 +10,7 @@ import { Database } from '../src/db/index.js';
 export async function startApp(overrides: Partial<Config> = {}, env: NodeJS.ProcessEnv = {}): Promise<App> {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'homecast-test-'));
   const config = loadConfig({ DATA_DIR: dataDir, ALLOW_PRIVATE_NETWORKS: 'true', PUBLIC_URL: 'http://localhost:8080', ...env }, { webDir: null, startWorkers: false, ...overrides });
-  const db = await Database.open({ dataDir, memory: true });
+  const db = await Database.open({ dataDir, memory: true, engine: process.env.HC_TEST_DB === 'sqlite' ? 'sqlite' : 'loki' });
   return buildApp(config, { db, logger: false });
 }
 

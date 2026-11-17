@@ -64,9 +64,11 @@ export class MirrorService {
     setTimeout(() => void this.kick(), 30_000).unref();
   }
 
-  stop(): void {
+  /** Cancel downloads. Resolves once the current run has finished writing. */
+  async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.abort.abort();
+    await this.running?.catch(() => undefined);
   }
 
   /**

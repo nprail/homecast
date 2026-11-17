@@ -78,6 +78,7 @@ The image runs as a non-root user with a read-only root filesystem (only `/data`
 | `WEB_DIR` | `../web/dist` | Static dashboard |
 | `MAX_EPISODES_PER_FEED` | `5000` | |
 | `MAX_REDIRECTS` | `10` | Redirects followed for feeds/audio (0 to 30); each hop is re-validated |
+| `DB_ENGINE` | `loki` | `loki` (in memory, JSON file) or `sqlite` (on disk); see the storage guide before switching |
 | `ALLOW_PRIVATE_NETWORKS` | `false` | Tests/dev only: disables the SSRF guard's address blocking |
 | `LOG_LEVEL` | `info` | |
 

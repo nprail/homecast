@@ -35,6 +35,13 @@ export class FeedService {
     return this.db.subscriptions.find({ podcastId }).filter((s) => !s.deleted).map((s) => s.userId);
   }
 
+  /** Subscribers per podcast in one pass, for pages that list many podcasts (instead of one query each). */
+  subscriberCounts(): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const s of this.db.subscriptions.where((x) => !x.deleted)) counts.set(s.podcastId, (counts.get(s.podcastId) ?? 0) + 1);
+    return counts;
+  }
+
   subscriberCount(podcastId: string): number {
     return this.db.subscriptions.find({ podcastId }).filter((s) => !s.deleted).length;
   }
@@ -280,12 +287,20 @@ export class FeedPoller {
     this.timer.unref();
     setTimeout(() => void this.tick(), 5000).unref();
   }
-  stop(): void {
+  /** Resolves once a poll in progress has finished writing. */
+  async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
+    await this.current?.catch(() => undefined);
+  }
+  private current: Promise<number> | null = null;
+
+  tick(concurrency = 3): Promise<number> {
+    if (this.running) return Promise.resolve(0);
+    this.current = this.poll(concurrency).finally(() => (this.current = null));
+    return this.current;
   }
 
-  async tick(concurrency = 3): Promise<number> {
-    if (this.running) return 0;
+  private async poll(concurrency: number): Promise<number> {
     this.running = true;
     try {
       const t = now();

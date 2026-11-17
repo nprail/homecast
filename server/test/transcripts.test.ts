@@ -107,6 +107,7 @@ describe('transcripts', () => {
     const eli = await createUser(a, admin, 'eli');
     const p = a.ctx.db.podcasts.find()[0]!;
     p.isPrivate = true;
+    a.ctx.db.podcasts.save(p);
     expect((await post(eli, `/episodes/${episode('plain').id}/transcript`)).statusCode).toBe(404);
     expect((await post(admin, `/episodes/${episode('plain').id}/transcript`)).statusCode).toBe(202);
   });
@@ -164,6 +165,7 @@ describe('admin usage, overview, backup', () => {
   it('flags failing feeds and refreshes them', async () => {
     const p = a.ctx.db.podcasts.find()[0]!;
     p.feedUrl = `${origin.url}/gone.xml`;
+    a.ctx.db.podcasts.save(p);
     await post(admin, `/admin/feeds/${p.id}/refresh`);
     const feeds = (await get(admin, '/admin/feeds?status=errors')).json();
     expect(feeds.feeds[0]).toMatchObject({ status: 'error', statusLabel: 'HTTP 404' });

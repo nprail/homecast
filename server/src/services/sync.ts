@@ -63,21 +63,38 @@ export class SyncService {
     } as const;
     for (const name of SYNC_USER_COLLECTIONS) {
       const repo = userRepos[name] as { find: (q: object) => { rev?: number; userId: string }[] };
-      for (const d of repo.find({ userId: user.id })) if ((d.rev ?? 0) > cursor) push(name, d, d.rev ?? 0);
+      for (const d of repo.find({ userId: user.id, rev: { $gt: cursor } })) push(name, d, d.rev ?? 0);
     }
 
     // Shared records for subscribed feeds. A subscription newer than the cursor backfills the
     // whole feed, with the subscription's rev as the records' effective rev.
     const subRev = new Map<string, number>();
     for (const s of this.db.subscriptions.find({ userId: user.id })) if (!s.deleted) subRev.set(s.podcastId, s.rev ?? 0);
+    // Podcasts and episodes for every followed podcast at once: a few queries however many podcasts there are (one round
+    // trip each on a networked database). A podcast followed since the cursor needs its whole feed; the others only what
+    // changed since the cursor, which is an index lookup rather than a scan.
+    const followed = [...subRev.keys()];
+    const fresh = followed.filter((id) => (subRev.get(id) ?? 0) > cursor);
+    const settled = followed.filter((id) => (subRev.get(id) ?? 0) <= cursor);
+    const podcasts = new Map(this.db.podcasts.find({ id: { $in: followed } }).map((p) => [p.id, p]));
+    const episodesOf = new Map<string, Episode[]>();
+    const group = (list: Episode[]) => {
+      for (const e of list) {
+        const bucket = episodesOf.get(e.podcastId) ?? [];
+        bucket.push(e);
+        episodesOf.set(e.podcastId, bucket);
+      }
+    };
+    if (fresh.length) group(this.db.episodes.find({ podcastId: { $in: fresh } }));
+    if (settled.length) group(this.db.episodes.find({ podcastId: { $in: settled }, rev: { $gt: cursor } }));
     for (const [podcastId, sRev] of subRev) {
       const backfill = sRev > cursor;
-      const p = this.db.podcasts.get(podcastId);
+      const p = podcasts.get(podcastId);
       if (p && !p.deleted) {
         const eff = Math.max(p.rev ?? 0, backfill ? sRev : 0);
         if (backfill || (p.rev ?? 0) > cursor) push('podcasts', p, eff);
       }
-      for (const e of this.db.episodes.find({ podcastId })) {
+      for (const e of episodesOf.get(podcastId) ?? []) {
         const eff = Math.max(e.rev ?? 0, backfill ? sRev : 0);
         if (backfill ? !e.deleted || (e.rev ?? 0) > cursor : (e.rev ?? 0) > cursor) push('episodes', e, eff);
       }

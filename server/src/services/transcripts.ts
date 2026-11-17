@@ -95,9 +95,18 @@ export class TranscriptService {
     }
     this.kick();
   }
-  stop(): void {
+  /** Stop taking jobs and cancel the running one. Resolves once all background work has finished writing. */
+  async stop(): Promise<void> {
     this.stopped = true;
     for (const c of this.active.values()) c.abort();
+    await Promise.allSettled([...this.pending]);
+  }
+  /** Background work that must finish before the database closes. */
+  private pending = new Set<Promise<unknown>>();
+  private track<R>(p: Promise<R>): Promise<R> {
+    this.pending.add(p);
+    void p.then(() => this.pending.delete(p), () => this.pending.delete(p));
+    return p;
   }
 
   get(episodeId: string) {
@@ -134,7 +143,7 @@ export class TranscriptService {
       finishedAt: null,
       durationMs: null,
     });
-    if (episode.transcriptUrl) void this.tryPublisher(job, episode);
+    if (episode.transcriptUrl) void this.track(this.tryPublisher(job, episode));
     else this.kick();
     return { status: 'queued', job };
   }
@@ -207,7 +216,7 @@ export class TranscriptService {
 
   kick(): void {
     if (this.running || this.stopped) return;
-    void this.loop();
+    void this.track(this.loop());
   }
 
   private async loop(): Promise<void> {

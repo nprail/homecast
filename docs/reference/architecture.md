@@ -31,7 +31,7 @@ description: "How the server, web app and native clients fit together."
 ## Server
 
 - **Stack**: Node.js, TypeScript (strict), Fastify, LokiJS, `fast-xml-parser`, `argon2`, `pino`.
-- **Repository layer**: all database access goes through `server/src/db`, a thin wrapper over LokiJS, so swapping the engine later (for example SQLite) is cheap. LokiJS is unmaintained.
+- **Repository layer**: all database access goes through `server/src/db`, a small `Repo` interface with two engines behind it: LokiJS (the default, in memory with a JSON file) and SQLite (`DB_ENGINE=sqlite`, the built-in `node:sqlite`). See [Storage engines](/guides/storage). LokiJS is unmaintained.
 - **Scale target**: about 1 to 20 users, 500 feeds and tens of thousands of episodes, comfortably in memory.
 - **Feed poller**: every 30 minutes by default with per-feed jitter, `ETag` / `If-Modified-Since`, and exponential backoff on failures.
 - **Job queue**: in-process, persisted in the database and resumed on boot. No external broker.

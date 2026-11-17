@@ -54,7 +54,7 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
   });
 
   setDefaultMaxRedirects(config.maxRedirects);
-  const db = opts.db ?? (await Database.open({ dataDir: config.dataDir }));
+  const db = opts.db ?? (await Database.open({ dataDir: config.dataDir, engine: config.dbEngine }));
   const log = app.log;
   const settings = new SettingsService(db, config);
   const audit = new AuditService(db);
@@ -168,11 +168,10 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
   }
 
   const close = async () => {
-    ctx.poller.stop();
     maintenance.stop();
-    transcripts.stop();
     autoTranscribe.stop();
-    mirror.stop();
+    // Let background work finish its last writes before the database closes.
+    await Promise.allSettled([ctx.poller.stop(), transcripts.stop(), mirror.stop()]);
     usage.stop();
     await app.close();
     await db.save();

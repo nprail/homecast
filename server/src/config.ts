@@ -23,9 +23,18 @@ export interface Config {
   allowPrivateNetworks: boolean;
   /** Redirects followed when fetching feeds and audio (each hop is re-validated). */
   maxRedirects: number;
+  /** Storage engine: `loki` (default) or `sqlite`. */
+  dbEngine: 'loki' | 'sqlite';
   logLevel: string;
   maxEpisodesPerFeed: number;
   startWorkers: boolean;
+}
+
+function parseDbEngine(raw: string | undefined): 'loki' | 'sqlite' {
+  const v = (raw ?? '').trim().toLowerCase();
+  if (v === '') return 'loki';
+  if (v === 'loki' || v === 'sqlite') return v;
+  throw new Error('DB_ENGINE must be "loki" or "sqlite"');
 }
 
 function parseMaxRedirects(raw: string | undefined): number {
@@ -82,6 +91,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
     version: VERSION,
     allowPrivateNetworks: env.ALLOW_PRIVATE_NETWORKS === 'true',
     maxRedirects: parseMaxRedirects(env.MAX_REDIRECTS),
+    dbEngine: parseDbEngine(env.DB_ENGINE),
     logLevel: env.LOG_LEVEL ?? 'info',
     maxEpisodesPerFeed: Number(env.MAX_EPISODES_PER_FEED ?? 5000),
     startWorkers: env.DISABLE_WORKERS !== 'true',

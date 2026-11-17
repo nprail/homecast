@@ -10,5 +10,6 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:sqlite -w server
       - run: npm run build
       - run: npm audit --audit-level=high

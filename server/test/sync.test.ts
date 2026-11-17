@@ -218,7 +218,9 @@ describe('sync protocol', () => {
     await post(admin, '/podcasts', { feedUrl: `${origin.url}/feed.xml` });
     await sync(admin, 0, { playlists: [{ id: 'pl_1abcdef', name: 'A', episodeIds: [], clientUpdatedAt: Date.now(), deleted: true }] });
     expect(a.ctx.sync.purgeTombstones()).toBe(0);
-    a.ctx.db.playlists.get('pl_1abcdef')!.deletedAt = Date.now() - 91 * 86_400_000;
+    const old = a.ctx.db.playlists.get('pl_1abcdef')!;
+    old.deletedAt = Date.now() - 91 * 86_400_000;
+    a.ctx.db.playlists.save(old);
     expect(a.ctx.sync.purgeTombstones()).toBe(1);
     expect(a.ctx.db.playlists.get('pl_1abcdef')).toBeNull();
     expect(a.ctx.db.horizon).toBeGreaterThan(0);

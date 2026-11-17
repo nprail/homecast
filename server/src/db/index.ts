@@ -1,72 +1,27 @@
-import { existsSync, mkdirSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
-import Loki from 'lokijs';
 import type {
-  AuditLogEntry, Bookmark, Episode, EpisodeState, Invite, Job, Meta, Playlist, Podcast, RefreshToken, ResetToken,
-  EpisodeChapters, EpisodeMirror, ServerSettings, SmartPlaylist, Subscription, Transcript, UsageStat, User, UserSettings,
+  AuditLogEntry, Bookmark, Episode, EpisodeChapters, EpisodeState, Invite, Job, Playlist, Podcast, RefreshToken, ResetToken,
+  EpisodeMirror, ServerSettings, SmartPlaylist, Subscription, Transcript, UsageStat, User, UserSettings,
 } from './types.js';
-import { clean, uuid } from '../util/misc.js';
+import { LokiBackend, listBackupFiles } from './loki.js';
+import type { Backend, EngineName, Repo } from './repo.js';
+import { SqliteBackend } from './sqlite.js';
+import { clean } from '../util/misc.js';
 
-type Doc<T> = T;
-
-/**
- * Thin repository over a LokiJS collection (spec §8). Everything outside `db/`
- * goes through this class, so swapping the storage engine later only touches this module.
- */
-export class Repo<T extends { id: string }> {
-  constructor(
-    readonly col: Collection<T>,
-    private readonly nextRev: (() => number) | null,
-  ) {}
-
-  insert(doc: Omit<T, 'id'> & { id?: string }): Doc<T> {
-    const full = { ...doc, id: doc.id ?? uuid() } as T & { rev?: number };
-    if (this.nextRev) full.rev = this.nextRev();
-    return this.col.insert(full as T) as Doc<T>;
-  }
-  /** Persist a mutated live document, bumping `rev` for synced collections. */
-  save(doc: Doc<T>): Doc<T> {
-    if (this.nextRev) (doc as T & { rev?: number }).rev = this.nextRev();
-    return this.col.update(doc as T & LokiObj) as Doc<T>;
-  }
-  /** Persist without touching `rev` (server-internal bookkeeping that clients don't need). */
-  saveQuiet(doc: Doc<T>): Doc<T> {
-    return this.col.update(doc as T & LokiObj) as Doc<T>;
-  }
-  get(id: string): Doc<T> | null {
-    return (this.col.by('id', id) as Doc<T> | undefined) ?? null;
-  }
-  findOne(q: LokiQuery<T & LokiObj>): Doc<T> | null {
-    return (this.col.findOne(q) as Doc<T> | null) ?? null;
-  }
-  find(q?: LokiQuery<T & LokiObj>): Doc<T>[] {
-    return (q ? this.col.find(q) : this.col.find()) as Doc<T>[];
-  }
-  where(fn: (d: Doc<T>) => boolean): Doc<T>[] {
-    return this.col.where(fn as unknown as (d: T) => boolean) as Doc<T>[];
-  }
-  count(q?: LokiQuery<T & LokiObj>): number {
-    return q ? this.col.count(q) : this.col.count();
-  }
-  remove(doc: Doc<T>): void {
-    this.col.remove(doc as T & LokiObj);
-  }
-  removeWhere(fn: (d: Doc<T>) => boolean): number {
-    const docs = this.where(fn);
-    for (const d of docs) this.col.remove(d);
-    return docs.length;
-  }
-}
+export type { EngineName, Query, Repo } from './repo.js';
+export const ENGINES: readonly EngineName[] = ['loki', 'sqlite'];
 
 export interface DbOptions {
   dataDir: string;
   /** In-memory only (tests). */
   memory?: boolean;
   autosaveMs?: number;
+  /** `loki` (default): in memory with a JSON file. `sqlite`: on disk, needs Node.js 22.5+. */
+  engine?: EngineName;
 }
 
 export class Database {
-  readonly loki: Loki;
   readonly users: Repo<User>;
   readonly refreshTokens: Repo<RefreshToken>;
   readonly invites: Repo<Invite>;
@@ -86,128 +41,114 @@ export class Database {
   readonly serverSettings: Repo<ServerSettings>;
   readonly episodeMirrors: Repo<EpisodeMirror>;
   readonly episodeChapters: Repo<EpisodeChapters>;
-  private meta!: Collection<Meta>;
-  private metaDoc!: Meta & LokiObj;
+  /** Every collection by name (copying between engines). */
+  readonly collections = new Map<string, Repo<{ id: string }>>();
   readonly file: string;
 
-  private constructor(loki: Loki, file: string) {
-    this.loki = loki;
-    this.file = file;
-    const rev = () => this.bumpRev();
-    const col = <T extends { id: string }>(name: string, unique: (keyof T & string)[], indices: (keyof T & string)[]) =>
-      (loki.getCollection<T>(name) ??
-        loki.addCollection<T>(name, { unique: ['id', ...unique] as never, indices: indices as never, clone: false })) as Collection<T>;
+  private constructor(readonly backend: Backend) {
+    this.file = backend.file;
+    const rev = () => backend.bumpRev();
+    const col = <T extends { id: string }>(name: string, unique: (keyof T & string)[], indices: (keyof T & string)[], synced = false, compound: string[][] = []): Repo<T> => {
+      const r = backend.repo<T>(name, unique, indices, synced ? rev : null, compound);
+      this.collections.set(name, r as unknown as Repo<{ id: string }>);
+      return r;
+    };
 
-    this.meta = col<Meta>('meta', [], []);
-    this.users = new Repo(col<User>('users', ['usernameKey'], []), null);
-    this.refreshTokens = new Repo(col<RefreshToken>('refreshTokens', [], ['userId']), null);
-    this.invites = new Repo(col<Invite>('invites', ['codeHash'], []), null);
-    this.resetTokens = new Repo(col<ResetToken>('resetTokens', ['tokenHash'], []), null);
-    this.podcasts = new Repo(col<Podcast>('podcasts', ['feedUrl'], ['rev']), rev);
-    this.episodes = new Repo(col<Episode>('episodes', [], ['podcastId', 'rev', 'guid', 'audioUrl']), rev);
-    this.transcripts = new Repo(col<Transcript>('transcripts', ['episodeId'], []), null);
-    this.subscriptions = new Repo(col<Subscription>('subscriptions', [], ['userId', 'podcastId', 'rev']), rev);
-    this.episodeStates = new Repo(col<EpisodeState>('episodeStates', [], ['userId', 'episodeId', 'rev']), rev);
-    this.bookmarks = new Repo(col<Bookmark>('bookmarks', [], ['userId', 'episodeId', 'rev']), rev);
-    this.playlists = new Repo(col<Playlist>('playlists', [], ['userId', 'rev']), rev);
-    this.smartPlaylists = new Repo(col<SmartPlaylist>('smartPlaylists', [], ['userId', 'rev']), rev);
-    this.userSettings = new Repo(col<UserSettings>('settings', [], ['userId', 'rev']), rev);
-    this.jobs = new Repo(col<Job>('jobs', [], ['episodeId', 'status']), null);
-    this.usageStats = new Repo(col<UsageStat>('usageStats', ['key'], ['userId', 'day']), null);
-    this.auditLog = new Repo(col<AuditLogEntry>('auditLog', [], ['at']), null);
-    this.serverSettings = new Repo(col<ServerSettings>('serverSettings', [], []), null);
-    this.episodeMirrors = new Repo(col<EpisodeMirror>('episodeMirrors', [], ['status']), null);
-    this.episodeChapters = new Repo(col<EpisodeChapters>('episodeChapters', ['episodeId'], []), null);
-
-    this.metaDoc = (this.meta.findOne({ id: 'rev' }) as (Meta & LokiObj) | null) ?? (this.meta.insert({ id: 'rev', rev: 0 }) as Meta & LokiObj);
+    this.users = col<User>('users', ['usernameKey'], []);
+    this.refreshTokens = col<RefreshToken>('refreshTokens', [], ['userId']);
+    this.invites = col<Invite>('invites', ['codeHash'], []);
+    this.resetTokens = col<ResetToken>('resetTokens', ['tokenHash'], []);
+    this.podcasts = col<Podcast>('podcasts', ['feedUrl'], ['rev'], true);
+    this.episodes = col<Episode>('episodes', [], ['podcastId', 'rev', 'guid', 'audioUrl', 'createdAt'], true, [['podcastId', 'rev']]);
+    this.transcripts = col<Transcript>('transcripts', ['episodeId'], []);
+    this.subscriptions = col<Subscription>('subscriptions', [], ['userId', 'podcastId', 'rev'], true, [['userId', 'rev']]);
+    this.episodeStates = col<EpisodeState>('episodeStates', [], ['userId', 'episodeId', 'rev'], true, [['userId', 'rev']]);
+    this.bookmarks = col<Bookmark>('bookmarks', [], ['userId', 'episodeId', 'rev'], true, [['userId', 'rev']]);
+    this.playlists = col<Playlist>('playlists', [], ['userId', 'rev'], true, [['userId', 'rev']]);
+    this.smartPlaylists = col<SmartPlaylist>('smartPlaylists', [], ['userId', 'rev'], true, [['userId', 'rev']]);
+    this.userSettings = col<UserSettings>('settings', [], ['userId', 'rev'], true, [['userId', 'rev']]);
+    this.jobs = col<Job>('jobs', [], ['episodeId', 'status']);
+    this.usageStats = col<UsageStat>('usageStats', ['key'], ['userId', 'day']);
+    this.auditLog = col<AuditLogEntry>('auditLog', [], ['at']);
+    this.serverSettings = col<ServerSettings>('serverSettings', [], []);
+    this.episodeMirrors = col<EpisodeMirror>('episodeMirrors', [], ['status']);
+    this.episodeChapters = col<EpisodeChapters>('episodeChapters', ['episodeId'], []);
   }
 
   static async open(opts: DbOptions): Promise<Database> {
-    const file = path.join(opts.dataDir, 'homecast.db.json');
-    mkdirSync(opts.dataDir, { recursive: true });
-    // Data directories created before the rename (when the project was called Podcast Sync).
-    const legacy = path.join(opts.dataDir, 'podsync.db.json');
-    if (!opts.memory && !existsSync(file) && existsSync(legacy)) renameSync(legacy, file);
-    const loki = await new Promise<Loki>((resolve, reject) => {
-      const db: Loki = new Loki(file, {
-        adapter: opts.memory ? new Loki.LokiMemoryAdapter() : new Loki.LokiFsAdapter(),
-        autoload: false,
-        autosave: !opts.memory,
-        autosaveInterval: opts.autosaveMs ?? 5000,
-        serializationMethod: 'normal',
-      });
-      db.loadDatabase({}, (err) => (err ? reject(err instanceof Error ? err : new Error(String(err))) : resolve(db)));
-    });
-    return new Database(loki, file);
+    if ((opts.engine ?? 'loki') === 'sqlite') {
+      const sqliteFile = path.join(opts.dataDir, 'homecast.db.sqlite');
+      const lokiFile = path.join(opts.dataDir, 'homecast.db.json');
+      const firstRun = !opts.memory && !existsSync(sqliteFile);
+      const db = new Database(SqliteBackend.open(opts));
+      // Switching an existing server to SQLite: bring the data over once. The JSON file is left untouched.
+      if (firstRun && existsSync(lokiFile)) {
+        const old = await Database.open({ dataDir: opts.dataDir, autosaveMs: 0, engine: 'loki' });
+        const n = copyDatabase(old, db);
+        await old.close();
+        process.stderr.write(`Imported ${n} records from ${lokiFile} into ${sqliteFile}. The JSON file was not changed.\n`);
+      }
+      return db;
+    }
+    return new Database(await LokiBackend.open(opts));
   }
 
-  private bumpRev(): number {
-    this.metaDoc.rev += 1;
-    this.meta.update(this.metaDoc);
-    return this.metaDoc.rev;
+  get engine(): EngineName {
+    return this.backend.kind;
   }
   get currentRev(): number {
-    return this.metaDoc.rev;
+    return this.backend.currentRev;
   }
   get horizon(): number {
-    return this.metaDoc.horizon ?? 0;
+    return this.backend.horizon;
   }
   raiseHorizon(rev: number): void {
-    if (rev > this.horizon) {
-      this.metaDoc.horizon = rev;
-      this.meta.update(this.metaDoc);
-    }
+    this.backend.raiseHorizon(rev);
+  }
+
+  /** Group many changes into one disk write (a single transaction on SQLite; a no-op on the in-memory engine). */
+  batch<R>(fn: () => R): R {
+    return this.backend.batch(fn);
   }
 
   /** Flush to disk now. */
   save(): Promise<void> {
-    return new Promise((resolve, reject) => this.loki.saveDatabase((err) => (err ? reject(err instanceof Error ? err : new Error(String(err))) : resolve())));
+    return this.backend.save();
   }
 
   fileSize(): number {
-    try {
-      return statSync(this.file).size;
-    } catch {
-      return 0;
-    }
+    return this.backend.fileSize();
   }
 
   /** Atomic snapshot into `backups/`, keeping the newest `keep`. Returns the file written. */
   snapshot(dataDir: string, keep = 14): { file: string; bytes: number; kept: number } {
-    const dir = path.join(dataDir, 'backups');
-    mkdirSync(dir, { recursive: true });
-    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-');
-    const final = path.join(dir, `homecast-${stamp}.json`);
-    const tmp = `${final}.tmp`;
-    const data = this.loki.serialize();
-    writeFileSync(tmp, data, { mode: 0o600 });
-    renameSync(tmp, final);
-    const files = this.listBackups(dataDir);
-    for (const old of files.slice(keep)) {
-      try {
-        unlinkSync(path.join(dir, old.name));
-      } catch {
-        /* ignore */
-      }
-    }
-    return { file: final, bytes: Buffer.byteLength(data), kept: Math.min(files.length, keep) };
+    return this.backend.snapshot(dataDir, keep);
   }
 
   listBackups(dataDir: string): { name: string; bytes: number; mtime: number }[] {
-    const dir = path.join(dataDir, 'backups');
-    if (!existsSync(dir)) return [];
-    return readdirSync(dir)
-      .filter((n) => /^(homecast|podsync)-.*\.json$/.test(n))
-      .map((name) => {
-        const st = statSync(path.join(dir, name));
-        return { name, bytes: st.size, mtime: st.mtimeMs };
-      })
-      .sort((a, b) => b.mtime - a.mtime || (a.name < b.name ? 1 : -1));
+    return listBackupFiles(dataDir);
   }
 
-  async close(): Promise<void> {
-    await new Promise<void>((resolve) => this.loki.close(() => resolve()));
+  close(): Promise<void> {
+    return this.backend.close();
   }
+}
+
+/** Copy every record from one database into an empty one (any engine to any engine). Returns the record count. */
+export function copyDatabase(from: Database, to: Database): number {
+  let n = 0;
+  to.batch(() => {
+    for (const [name, src] of from.collections) {
+      const dst = to.collections.get(name);
+      if (!dst) continue;
+      for (const doc of src.find()) {
+        dst.insertRaw(clean(JSON.parse(JSON.stringify(doc)) as { id: string })); // drop the in-memory engine's bookkeeping fields
+        n++;
+      }
+    }
+  });
+  to.backend.setRevState(from.currentRev, from.horizon);
+  return n;
 }
 
 export { clean };
