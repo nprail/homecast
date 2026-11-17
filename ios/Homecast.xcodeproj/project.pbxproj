@@ -10,6 +10,7 @@
 		00D905FA9032359D2C980656 /* PlayerSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84CE1FF864CCBB36B3965504 /* PlayerSheets.swift */; };
 		0254022F2FC2C1D0F49096A4 /* Player.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C0C65B646FF0C7802D1AE1 /* Player.swift */; };
 		02BCB9C8C686F07188B173E3 /* MiniPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E6B0572801C8681372EC338 /* MiniPlayer.swift */; };
+		B1C2D3E4F5061728394A5B6C /* AirPlayButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* AirPlayButton.swift */; };
 		031A992496082A2314395035 /* LocalData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78CB598176651297DCDFF475 /* LocalData.swift */; };
 		06F62D5DB4EDAC5558EDFB45 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 5B2933B9AD5422F1E8E6B835 /* GRDB */; };
 		0C317FC53A982B95561E739C /* HomecastApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0E565585B5F80BF6FACCE9B /* HomecastApp.swift */; };
@@ -70,6 +71,7 @@
 		380A03DB76B2C91C3B62B2B0 /* AppDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabase.swift; sourceTree = "<group>"; };
 		3B2809092C49F71C2DAD3F19 /* Records.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Records.swift; sourceTree = "<group>"; };
 		3E6B0572801C8681372EC338 /* MiniPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayer.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* AirPlayButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPlayButton.swift; sourceTree = "<group>"; };
 		47F4EDD7669487B3858D8F3A /* DownloadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsView.swift; sourceTree = "<group>"; };
 		4C32A7E2FCE7CD7FEE585687 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		4C968D0D2FACB83161E9016B /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
@@ -279,6 +281,7 @@
 			isa = PBXGroup;
 			children = (
 				3E6B0572801C8681372EC338 /* MiniPlayer.swift */,
+				A1B2C3D4E5F60718293A4B5C /* AirPlayButton.swift */,
 				F5AB7545291C8B0FB38B1DFD /* NowPlayingView.swift */,
 				84CE1FF864CCBB36B3965504 /* PlayerSheets.swift */,
 				9C720AC96087245B39FA5AE4 /* Scrubber.swift */,
@@ -515,6 +518,7 @@
 				781D9186EE4D4A597D686889 /* LibraryView.swift in Sources */,
 				031A992496082A2314395035 /* LocalData.swift in Sources */,
 				02BCB9C8C686F07188B173E3 /* MiniPlayer.swift in Sources */,
+				B1C2D3E4F5061728394A5B6C /* AirPlayButton.swift in Sources */,
 				1F681ADFA6C66DA2DAC7BCD3 /* NowPlayingView.swift in Sources */,
 				0254022F2FC2C1D0F49096A4 /* Player.swift in Sources */,
 				00D905FA9032359D2C980656 /* PlayerSheets.swift in Sources */,

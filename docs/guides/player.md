@@ -23,6 +23,25 @@ The web player is an installable PWA. It stores everything it shows in a local d
 | Sleep timer | 5, 15, 30, 45, 60 minutes, a custom time, or end of episode. Fades out over the last 10 s; tap (or shake on mobile) to extend |
 | Resume | position saved locally every 5 s, pushed to the server on pause, episode change and every 30 s while online |
 
+## Casting
+
+Play on a speaker, TV or Chromecast from the full-screen player (the **Cast** button, or the AirPlay button on iPhone and iPad). The phone or browser stays the remote: play, pause, seek, skip and speed all work, and your position keeps syncing to the server while the device plays.
+
+| | How |
+|---|---|
+| Web | the browser's own device picker: Chromecast in Chrome and Edge, AirPlay in Safari. Firefox has no casting |
+| Android | Google Cast (Chromecast, and speakers and TVs with Google Cast built in). Needs Google Play services |
+| iOS | AirPlay (the system route picker). Chromecast devices are not supported on iOS |
+
+How the device gets the audio:
+
+- **A copy the server hosts** (episode hosting) is played from the server through a signed link, so the device must be able to reach your server. A server on `localhost`, or one that is only reachable from outside your network, cannot be cast from; use an address the device can open (your LAN address, or the public URL).
+- **Any other episode** is fetched from the podcast's own address by the device itself.
+- **A downloaded episode** lives on your phone or in your browser, so the device cannot read it. While casting, the app plays the server's copy or the podcast's address instead, and goes back to the download when you stop.
+- Devices have to be on the same network as the phone, and (on Android and in Chrome) are found only while the picker is open or in the page.
+
+Choosing "This phone" (Android) or stopping the cast brings playback back to the phone at the same position. The sleep timer still pauses a cast session; its volume fade does not apply to a device.
+
 ## Chapters
 
 When an episode has chapters, the player shows the current chapter under the title, marks them on the seek bar and adds a **Chapters** list: tap a chapter to jump to it. The episode page lists them too.

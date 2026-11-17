@@ -10,7 +10,7 @@ import { useLayer } from '../lib/backStack';
 import { shareMoment } from '../lib/share';
 import { toast, ui } from '../lib/ui';
 import { Art } from './Art';
-import { Bookmark, CheckCircle, ChevronDown, ChevronLeft, Lines, MoreH, Moon, PauseIcon, PlayIcon, Search, Skip } from './picons';
+import { Bookmark, Cast, CheckCircle, ChevronDown, ChevronLeft, Lines, MoreH, Moon, PauseIcon, PlayIcon, Search, Skip } from './picons';
 import { ProgressBar } from './ProgressBar';
 
 /** How far ahead of the audio clock the current line is chosen (compensates for late Whisper timestamps). */
@@ -29,6 +29,7 @@ function usePlayer() {
     speed: player.state.use((s) => s.speed),
     isOverride: player.state.use((s) => s.speedIsOverride),
     sleep: player.state.use((s) => s.sleep),
+    cast: player.state.use((s) => s.cast),
     fading: player.state.use((s) => s.fading),
     context: player.state.use((s) => s.context),
     error: player.state.use((s) => s.error),
@@ -76,7 +77,7 @@ export function NowPlaying() {
 }
 
 function PlayerPanel() {
-  const { player, episode, podcast, playing, pos, dur, speed, isOverride, sleep, fading, context, error } = usePlayer();
+  const { player, episode, podcast, playing, pos, dur, speed, isOverride, sleep, fading, context, error, cast } = usePlayer();
   const { db } = useApp();
   const markers = useMarkers(episode?.id);
   const queue = useQueueIds();
@@ -136,6 +137,11 @@ function PlayerPanel() {
         <button onClick={() => ui.set({ transcript: true })} className="flex flex-1 flex-col items-center justify-center gap-1 rounded-[14px] border-0 bg-p-surface text-p-text">
           <Lines /><span className="text-xs text-p-muted">{hasTranscript ? 'Transcript' : 'Transcript'}</span>
         </button>
+        {cast.supported && cast.available && (
+          <button onClick={() => void player.openCast()} aria-label={cast.status === 'connected' ? 'Casting. Choose a device' : 'Cast to a device'} className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-[14px] border-0 bg-p-surface ${cast.status === 'idle' ? 'text-p-text' : 'text-p-accent'}`}>
+            <Cast /><span className="text-xs text-p-muted">{cast.status === 'connected' ? 'Casting' : cast.status === 'connecting' ? 'Connecting' : 'Cast'}</span>
+          </button>
+        )}
       </div>
 
       {chapters.length > 0 && (

@@ -10,6 +10,9 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
+import androidx.media3.cast.CastPlayer
+import androidx.media3.cast.DefaultMediaItemConverter
+import com.google.android.gms.cast.framework.CastContext
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
@@ -50,6 +53,7 @@ class PlaybackService : MediaLibraryService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var exo: ExoPlayer
+    private var castPlayer: CastPlayer? = null
     private lateinit var engine: PlaybackEngine
     private lateinit var tree: BrowseTree
     private var session: MediaLibrarySession? = null
@@ -82,6 +86,11 @@ class PlaybackService : MediaLibraryService() {
             .setMediaButtonPreferences(buttons())
         if (activity != null) builder.setSessionActivity(activity)
         session = builder.build()
+        // Cast: when a device connects, playback moves to a CastPlayer and the session follows it. Without Google Play
+        // services (or if the Cast framework cannot start) there is simply no casting.
+        engine.onPlayerChanged = { p -> session?.player = EnginePlayer(p, engine) }
+        runCatching { CastPlayer(CastContext.getSharedInstance(this), DefaultMediaItemConverter(), SKIP_BACK_MS, SKIP_FORWARD_MS) }
+            .onSuccess { castPlayer = it; engine.attachCast(it) }
 
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider.Builder(this)
@@ -103,7 +112,7 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Keep playing in the background; stop only when nothing is playing.
-        if (!exo.playWhenReady || exo.mediaItemCount == 0) pauseAllPlayersAndStopSelf()
+        if (!engine.player.playWhenReady || engine.player.mediaItemCount == 0) pauseAllPlayersAndStopSelf()
     }
 
     override fun onDestroy() {
@@ -112,6 +121,7 @@ class PlaybackService : MediaLibraryService() {
         session?.release()
         session = null
         engine.release()
+        castPlayer?.release()
         exo.release()
         super.onDestroy()
     }

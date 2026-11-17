@@ -8,6 +8,8 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.cast.CastPlayer
+import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.exoplayer.ExoPlayer
 import app.homecast.contract.*
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +37,12 @@ internal class PlaybackEngine(
 ) : Player.Listener {
 
     private var s = PlayerState()
+    /** The player in use: the local ExoPlayer, or the CastPlayer while a Cast session is connected. */
+    var player: Player = exo
+        private set
+    private var cast: CastPlayer? = null
+    /** Called when the active player changes, so the media session can follow it. */
+    var onPlayerChanged: ((Player) -> Unit)? = null
     private var loadToken = 0
     private var ticks = 0
     private var durationRefinedToken = -1
@@ -56,7 +64,7 @@ internal class PlaybackEngine(
     val speed: Double get() = s.speed
 
     init {
-        exo.addListener(this)
+        player.addListener(this)
         ticker = scope.launch {
             while (true) {
                 delay(500)
@@ -98,7 +106,7 @@ internal class PlaybackEngine(
                 return@launch
             }
             val settings = runCatching { lib.getSettings() }.getOrDefault(UserSettings())
-            val local = if (allowLocal) runCatching { graph()?.downloads?.fileFor(episodeId) }.getOrNull() else null
+            val local = if (allowLocal && player === exo) runCatching { graph()?.downloads?.fileFor(episodeId) }.getOrNull() else null
             // Not downloaded: stream the server's hosted copy through a signed URL when it has one.
             val hosted = if (local == null) hostedUrl(episodeId) else null
             if (token != loadToken) return@launch
@@ -116,13 +124,13 @@ internal class PlaybackEngine(
                     playingOffline = local != null, isBuffering = effectiveAutoplay != false, isFading = false,
                 )
             }
-            exo.volume = 1f
+            player.volume = 1f
             playingSigned = local == null && hosted != null
             recoveries = 0
-            exo.setMediaItem(mediaItem(ep, item.podcast, local, hosted, s.durationMs), resumeMs)
-            exo.playbackParameters = PlaybackParameters(newSpeed.toFloat(), 1f)
-            exo.prepare()
-            if (effectiveAutoplay != null) exo.playWhenReady = effectiveAutoplay
+            player.setMediaItem(mediaItem(ep, item.podcast, local, hosted, s.durationMs), resumeMs)
+            player.playbackParameters = PlaybackParameters(newSpeed.toFloat(), 1f)
+            player.prepare()
+            if (effectiveAutoplay != null) player.playWhenReady = effectiveAutoplay
             runCatching {
                 lib.kvSet("player.episodeId", episodeId)
                 lib.kvSet("player.context", ContextCodec.encode(context))
@@ -143,16 +151,16 @@ internal class PlaybackEngine(
      */
     private fun renewStream() {
         val ep = s.episode ?: return
-        val position = exo.currentPosition
-        val play = exo.playWhenReady
+        val position = player.currentPosition
+        val play = player.playWhenReady
         val attempt = ++recoveries
         scope.launch {
             val fresh = if (attempt <= 2) hostedUrl(ep.id) else null
             if (s.episode?.id != ep.id) return@launch
             playingSigned = fresh != null
-            exo.setMediaItem(mediaItem(ep, s.podcast, null, fresh, s.durationMs), position)
-            exo.prepare()
-            exo.playWhenReady = play
+            player.setMediaItem(mediaItem(ep, s.podcast, null, fresh, s.durationMs), position)
+            player.prepare()
+            player.playWhenReady = play
         }
     }
 
@@ -171,7 +179,7 @@ internal class PlaybackEngine(
             .setMediaId(ep.id)
             .setUri(if (local != null) Uri.fromFile(local) else Uri.parse(hosted ?: ep.audioUrl))
             .setMediaMetadata(md)
-        if (local == null && ep.mimeType.isNotBlank()) b.setMimeType(ep.mimeType)
+        if (local == null) b.setMimeType(ep.mimeType.ifBlank { "audio/mpeg" }) // a Cast receiver needs the type
         return b.build()
     }
 
@@ -185,7 +193,7 @@ internal class PlaybackEngine(
         val ids = items.map { it.mediaId }.filter { it.isNotEmpty() }
         val id = items.getOrNull(startIndex)?.mediaId?.takeIf { it.isNotEmpty() } ?: ids.firstOrNull() ?: return
         val ctx = browseContexts[id] ?: if (ids.size > 1) PlayContext("Up Next", ids) else PlayContext("Up Next")
-        if (id == s.episode?.id && exo.mediaItemCount > 0) return // already loaded: the following `play()` just resumes
+        if (id == s.episode?.id && player.mediaItemCount > 0) return // already loaded: the following `play()` just resumes
         load(id, null, ctx)
     }
 
@@ -213,7 +221,7 @@ internal class PlaybackEngine(
     override fun onPlayerError(error: PlaybackException) {
         if (s.playingOffline && error.errorCode == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND) {
             // The file vanished (cleared storage): fall back to streaming.
-            s.episode?.let { load(it.id, exo.playWhenReady, s.context, allowLocal = false) }
+            s.episode?.let { load(it.id, player.playWhenReady, s.context, allowLocal = false) }
             return
         }
         if (playingSigned) {
@@ -229,12 +237,12 @@ internal class PlaybackEngine(
     }
 
     private fun updateBuffering() {
-        val buffering = exo.playbackState == Player.STATE_BUFFERING && exo.playWhenReady && exo.mediaItemCount > 0
+        val buffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady && player.mediaItemCount > 0
         if (buffering != s.isBuffering) publish { copy(isBuffering = buffering) }
     }
 
     private fun refineDuration() {
-        val d = exo.duration
+        val d = player.duration
         if (d == C.TIME_UNSET || d <= 0) return
         if (d != s.durationMs) publish { copy(durationMs = d) }
         if (durationRefinedToken == loadToken) return
@@ -251,10 +259,10 @@ internal class PlaybackEngine(
     // ---- tick: position, persistence, sync, sleep ----------------------------------------------------------------
 
     private fun onTick() {
-        if (s.episode == null || exo.mediaItemCount == 0) return
-        val pos = exo.currentPosition.coerceAtLeast(0)
-        if (pos != s.positionMs && exo.playbackState != Player.STATE_ENDED) publish { copy(positionMs = pos) }
-        if (!exo.isPlaying) return
+        if (s.episode == null || player.mediaItemCount == 0) return
+        val pos = player.currentPosition.coerceAtLeast(0)
+        if (pos != s.positionMs && player.playbackState != Player.STATE_ENDED) publish { copy(positionMs = pos) }
+        if (!player.isPlaying) return
         ticks++
         if (ticks % 10 == 0) persist(syncSoon = false)                                     // every 5 s
         if (ticks % 60 == 0) scope.launch { runCatching { syncEngine()?.sync() } }          // every 30 s while online
@@ -263,8 +271,8 @@ internal class PlaybackEngine(
 
     private fun persist(syncSoon: Boolean) {
         val ep = s.episode ?: return
-        if (exo.mediaItemCount == 0) return
-        val pos = exo.currentPosition
+        if (player.mediaItemCount == 0) return
+        val pos = player.currentPosition
         if (pos < 0) return
         // Unknown duration: pass a huge one so the "within 5 s of the end" rule can't mark the episode played.
         val dur = if (s.durationMs > 0) s.durationMs else Long.MAX_VALUE / 4
@@ -276,38 +284,38 @@ internal class PlaybackEngine(
 
     // ---- controls ---------------------------------------------------------------------------------------------
 
-    fun toggle() = if (exo.playWhenReady && exo.playbackState != Player.STATE_ENDED) pause() else resume()
+    fun toggle() = if (player.playWhenReady && player.playbackState != Player.STATE_ENDED) pause() else resume()
 
     fun pause() {
         if (loading) intentDuringLoad = false
-        exo.pause()
+        player.pause()
     }
 
     fun resume() {
         if (loading) {
             intentDuringLoad = true
-            exo.playWhenReady = true
+            player.playWhenReady = true
             return
         }
         val ep = s.episode
-        if (exo.mediaItemCount == 0) {
+        if (player.mediaItemCount == 0) {
             if (ep != null) load(ep.id, true, s.context)
             return
         }
-        if (exo.playbackState == Player.STATE_ENDED) exo.seekTo(0)
-        else if (exo.playbackState == Player.STATE_IDLE) exo.prepare()
-        exo.play()
+        if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+        else if (player.playbackState == Player.STATE_IDLE) player.prepare()
+        player.play()
     }
 
     fun seekTo(ms: Long) {
-        if (exo.mediaItemCount == 0) return
+        if (player.mediaItemCount == 0) return
         val max = if (s.durationMs > 0) s.durationMs else Long.MAX_VALUE
         val clamped = ms.coerceIn(0, max)
-        exo.seekTo(clamped)
+        player.seekTo(clamped)
         publish { copy(positionMs = clamped) }
     }
 
-    fun skip(seconds: Int) = seekTo(exo.currentPosition + seconds * 1000L)
+    fun skip(seconds: Int) = seekTo(player.currentPosition + seconds * 1000L)
     fun back() = skip(-15)
     fun forward() = skip(30)
 
@@ -336,7 +344,7 @@ internal class PlaybackEngine(
             publish { copy(positionMs = 0) }
             if (s.sleep == SleepMode.EndOfEpisode) {
                 publish { copy(sleep = SleepMode.Off, isFading = false) }
-                exo.volume = 1f
+                player.volume = 1f
                 shake.stop()
                 stopAtStart()
                 return@launch
@@ -348,7 +356,7 @@ internal class PlaybackEngine(
     }
 
     private fun stopAtStart() {
-        exo.playWhenReady = false
+        player.playWhenReady = false
         publish { copy(isPlaying = false, isBuffering = false, positionMs = 0) }
     }
 
@@ -381,7 +389,7 @@ internal class PlaybackEngine(
             if (s.episode?.id != ep.id) return@launch
             val sp = SpeedMath.resolve(st.defaultSpeed, st.podcastSpeeds, ep.podcastId)
             publish { copy(speed = sp, speedIsOverride = st.podcastSpeeds.containsKey(ep.podcastId)) }
-            exo.playbackParameters = PlaybackParameters(sp.toFloat(), 1f) // pitch stays 1.0: pitch-corrected speech
+            player.playbackParameters = PlaybackParameters(sp.toFloat(), 1f) // pitch stays 1.0: pitch-corrected speech
         }
     }
 
@@ -390,7 +398,7 @@ internal class PlaybackEngine(
     /** Returns false when nothing is loaded. */
     fun addBookmarkAtCurrent(title: String? = null, note: String? = null): Boolean {
         val ep = s.episode ?: return false
-        val pos = exo.currentPosition.coerceAtLeast(0)
+        val pos = player.currentPosition.coerceAtLeast(0)
         scope.launch { runCatching { library()?.addBookmark(ep.id, pos, title, note) } }
         return true
     }
@@ -399,7 +407,7 @@ internal class PlaybackEngine(
 
     fun setSleep(mode: SleepMode) {
         publish { copy(sleep = mode, isFading = false) }
-        exo.volume = 1f
+        player.volume = 1f
         if (mode == SleepMode.Off) shake.stop() else shake.start()
     }
 
@@ -412,22 +420,63 @@ internal class PlaybackEngine(
 
     private fun tickSleep() {
         if (s.sleep == SleepMode.Off) return
-        val step = SleepMath.evaluate(s.sleep, System.currentTimeMillis(), exo.currentPosition, s.durationMs, s.speed)
+        val step = SleepMath.evaluate(s.sleep, System.currentTimeMillis(), player.currentPosition, s.durationMs, s.speed)
         when {
             step.expired -> {
-                exo.pause()
-                exo.volume = 1f
+                player.pause()
+                player.volume = 1f
                 publish { copy(sleep = SleepMode.Off, isFading = false) }
                 shake.stop()
             }
             step.fading -> {
-                exo.volume = step.volume
+                player.volume = step.volume
                 if (!s.isFading) publish { copy(isFading = true) }
             }
             s.isFading -> {
-                exo.volume = 1f
+                player.volume = 1f
                 publish { copy(isFading = false) }
             }
+        }
+    }
+
+    // ---- casting ---------------------------------------------------------------------------------------------
+
+    /** Follow the Cast session: move playback to the device when one connects and back to the phone when it ends. */
+    fun attachCast(c: CastPlayer) {
+        cast = c
+        c.setSessionAvailabilityListener(object : SessionAvailabilityListener {
+            override fun onCastSessionAvailable() = switchTo(c)
+            override fun onCastSessionUnavailable() = switchTo(exo)
+        })
+        if (c.isCastSessionAvailable) switchTo(c)
+    }
+
+    /** Hand the current episode to [next], at the same position and play state. */
+    private fun switchTo(next: Player) {
+        if (next === player) return
+        val prev = player
+        val position = prev.currentPosition.coerceAtLeast(0)
+        val play = prev.playWhenReady
+        val ep = s.episode
+        prev.removeListener(this)
+        prev.stop()
+        prev.clearMediaItems()
+        player = next
+        next.addListener(this)
+        onPlayerChanged?.invoke(next)
+        publish { copy(playingOffline = false, isBuffering = ep != null && play) }
+        if (ep == null) return
+        scope.launch {
+            // A device cannot read a file on this phone: it gets the server's copy or the podcast's own address.
+            val local = if (next === exo) runCatching { graph()?.downloads?.fileFor(ep.id) }.getOrNull() else null
+            val hosted = if (local == null) hostedUrl(ep.id) else null
+            if (player !== next || s.episode?.id != ep.id) return@launch
+            playingSigned = local == null && hosted != null
+            publish { copy(playingOffline = local != null) }
+            next.setMediaItem(mediaItem(ep, s.podcast, local, hosted, s.durationMs), position)
+            next.playbackParameters = PlaybackParameters(s.speed.toFloat(), 1f)
+            next.prepare()
+            next.playWhenReady = play
         }
     }
 
@@ -437,7 +486,8 @@ internal class PlaybackEngine(
         persist(syncSoon = true)
         ticker?.cancel()
         shake.stop()
-        exo.removeListener(this)
+        player.removeListener(this)
+        cast?.setSessionAvailabilityListener(null)
         publish { copy(isPlaying = false, isBuffering = false) }
         scope.cancel()
     }

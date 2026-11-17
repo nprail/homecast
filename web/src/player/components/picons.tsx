@@ -23,6 +23,7 @@ export function Skip({ dir, secs, size = 38 }: { dir: 'back' | 'fwd'; secs: numb
     </svg>
   );
 }
+export const Cast = (p: P) => (<S {...p}><path d="M3 8V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M3 12a9 9 0 0 1 8 8M3 16a5 5 0 0 1 4 4M3 20h.01" /></S>);
 export const Moon = (p: P) => (<S {...p}><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></S>);
 export const Bookmark = (p: P) => (<S {...p}><path d="M6 4h12v17l-6-4-6 4z" /></S>);
 export const BookmarkFilled = ({ size = 24 }: P) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M6 4h12v17l-6-4-6 4z" /></svg>);

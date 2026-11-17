@@ -47,6 +47,7 @@ import app.homecast.android.ui.components.Fmt
 import app.homecast.android.ui.components.EpisodeMenu
 import app.homecast.android.ui.transcript.TranscriptPanel
 import app.homecast.contract.PlayerState
+import app.homecast.contract.CastState
 import app.homecast.contract.SleepMode
 import kotlinx.coroutines.delay
 
@@ -96,13 +97,14 @@ fun MiniPlayer(onOpen: () -> Unit) {
 // Full-screen player
 // ---------------------------------------------------------------------------------------------------------------
 
-private enum class PlayerSheet { Speed, Sleep, Queue, Chapters }
+private enum class PlayerSheet { Speed, Sleep, Queue, Chapters, Cast }
 
 @Composable
 fun NowPlayingScreen(onClose: () -> Unit, nav: AppNav) {
     val graph = LocalGraph.current
     val ui = LocalAppUi.current
     val st by graph.player.state.collectAsStateWithLifecycle()
+    val cast by graph.player.cast.collectAsStateWithLifecycle()
     val episode = st.episode
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
     var showTranscript by rememberSaveable { mutableStateOf(false) }
@@ -179,7 +181,7 @@ fun NowPlayingScreen(onClose: () -> Unit, nav: AppNav) {
                 Spacer(Modifier.height(4.dp))
                 Transport(st)
                 Spacer(Modifier.height(8.dp))
-                ActionRow(st, showTranscript, hasChapters = chapters.isNotEmpty(), onChapters = { sheet = PlayerSheet.Chapters }, onSpeed = { sheet = PlayerSheet.Speed }, onSleep = { sheet = PlayerSheet.Sleep }, onQueue = { sheet = PlayerSheet.Queue },
+                ActionRow(st, cast, showTranscript, hasChapters = chapters.isNotEmpty(), onCast = { sheet = PlayerSheet.Cast }, onChapters = { sheet = PlayerSheet.Chapters }, onSpeed = { sheet = PlayerSheet.Speed }, onSleep = { sheet = PlayerSheet.Sleep }, onQueue = { sheet = PlayerSheet.Queue },
                     onBookmark = { ui.bookmarkTarget = BookmarkTarget(episode.id, graph.player.state.value.positionMs) },
                     onTranscript = { showTranscript = !showTranscript })
                 Spacer(Modifier.height(12.dp))
@@ -190,6 +192,7 @@ fun NowPlayingScreen(onClose: () -> Unit, nav: AppNav) {
         PlayerSheet.Speed -> SpeedSheet(st) { sheet = null }
         PlayerSheet.Sleep -> SleepSheet(st) { sheet = null }
         PlayerSheet.Queue -> UpNextSheet(st) { sheet = null }
+        PlayerSheet.Cast -> CastSheet(cast) { sheet = null }
         PlayerSheet.Chapters -> ChaptersSheet(chapters, st.positionMs, onSeek = { graph.player.seekTo(it) }) { sheet = null }
         null -> {}
     }
@@ -256,7 +259,7 @@ private fun SkipIcon(back: Boolean, seconds: Int) {
 
 @Composable
 private fun ActionRow(
-    st: PlayerState, transcriptOn: Boolean, hasChapters: Boolean, onChapters: () -> Unit,
+    st: PlayerState, cast: CastState, transcriptOn: Boolean, hasChapters: Boolean, onCast: () -> Unit, onChapters: () -> Unit,
     onSpeed: () -> Unit, onSleep: () -> Unit, onBookmark: () -> Unit, onTranscript: () -> Unit, onQueue: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -273,6 +276,9 @@ private fun ActionRow(
             Icon(if (transcriptOn) Icons.Filled.Subject else Icons.Outlined.Subject, if (transcriptOn) "Hide transcript" else "Show transcript", tint = if (transcriptOn) scheme.primary else scheme.onSurfaceVariant)
         }
         if (hasChapters) IconButton(onClick = onChapters) { Icon(Icons.AutoMirrored.Outlined.FormatListBulleted, "Chapters") }
+        if (cast.supported) IconButton(onClick = onCast) {
+            Icon(if (cast.connected != null) Icons.Filled.CastConnected else Icons.Outlined.Cast, if (cast.connected != null) "Casting to ${cast.connected?.name}. Choose a device" else "Cast to a device", tint = if (cast.connected != null) scheme.primary else scheme.onSurfaceVariant)
+        }
         IconButton(onClick = onQueue) { Icon(Icons.Outlined.QueueMusic, "Up Next") }
     }
 }

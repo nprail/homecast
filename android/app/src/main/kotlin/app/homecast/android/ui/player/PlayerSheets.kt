@@ -23,11 +23,53 @@ import app.homecast.android.ui.LocalGraph
 import app.homecast.android.ui.components.Artwork
 import app.homecast.android.ui.components.EmptyState
 import app.homecast.android.ui.components.Fmt
+import app.homecast.contract.CastState
 import app.homecast.contract.PlayerState
 import app.homecast.contract.SleepMode
 import app.homecast.contract.SpeedScope
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+// ---- Cast -----------------------------------------------------------------------------------------------------
+
+/** Pick a Cast device to play on, or bring playback back to the phone. Looks for devices only while it is open. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun CastSheet(cast: CastState, onDismiss: () -> Unit) {
+    val graph = LocalGraph.current
+    val scheme = MaterialTheme.colorScheme
+    DisposableEffect(Unit) {
+        graph.player.startCastDiscovery()
+        onDispose { graph.player.stopCastDiscovery() }
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Play on", style = MaterialTheme.typography.titleMedium, color = scheme.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            ListItem(
+                headlineContent = { Text("This phone") },
+                leadingContent = { Icon(Icons.Outlined.PhoneAndroid, null) },
+                trailingContent = { if (cast.connected == null) Icon(Icons.Filled.Check, "Selected", tint = scheme.primary) },
+                modifier = Modifier.clickable { if (cast.connected != null) graph.player.stopCasting(); onDismiss() },
+            )
+            cast.devices.forEach { d ->
+                val on = cast.connected?.id == d.id
+                ListItem(
+                    headlineContent = { Text(d.name) },
+                    leadingContent = { Icon(if (on) Icons.Filled.CastConnected else Icons.Outlined.Cast, null) },
+                    trailingContent = { if (on) Icon(Icons.Filled.Check, "Selected", tint = scheme.primary) },
+                    modifier = Modifier.clickable { if (!on) graph.player.castTo(d.id); onDismiss() },
+                )
+            }
+            if (cast.devices.isEmpty()) {
+                Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Text("Looking for devices. They need to be on the same Wi-Fi as this phone.", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
 
 // ---- Speed ----------------------------------------------------------------------------------------------------
 

@@ -9,6 +9,7 @@ open ios/Homecast.xcodeproj   # regular Xcode project, GRDB comes in via Swift P
 - `Core/` models (synced records), GRDB database, sync engine (outbox + delta sync, spec §5), API client + Keychain, player (AVPlayer, Now Playing, sleep timer, speed resolution), background downloads.
 - Streaming: when the server hosts a copy of an episode (episode hosting), `Player` asks `APIClient.signedStreamURL` for a signed URL and plays that; it renews the link if it expires and falls back to the podcast's own URL. Downloaded episodes play from disk.
 - `Features/` SwiftUI screens: Library, Podcast, Episode, Up Next / Playlists / Smart playlists (on-device evaluator), Bookmarks, Transcripts, Discover, Downloads, Settings.
+- Casting: `AirPlayButton` (the system route picker) in the full-screen player. AVPlayer hands playback to the chosen AirPlay route itself; there is no Chromecast support on iOS (it would need the Google Cast SDK).
 - `CarPlay/` CPTemplateApplicationSceneDelegate: tabs Up Next, Playlists, Podcasts, Downloads; Now Playing with speed + bookmark buttons.
 - `Tests/` run the shared smart-playlist vectors (`shared/vectors/smart-playlist.json`) plus data-layer tests: `xcodebuild test -scheme Homecast -destination 'platform=iOS Simulator,name=iPhone 17'`.
 

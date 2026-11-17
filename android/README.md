@@ -15,6 +15,8 @@ Modules
 - `:playback` Media3 `MediaLibraryService` (ExoPlayer, notification, Bluetooth/headset), sleep timer, WorkManager downloads, Android Auto browse tree (Up Next, Playlists, Podcasts, Downloads) with speed and bookmark actions.
 - `:app` Compose UI with the Homecast brand on Material 3 (teal/amber on ink, Space Grotesk, light and dark themes).
 
+Casting: Google Cast through Media3's `CastPlayer`. `CastRoutes` (MediaRouter) finds devices while the picker sheet is open and selects one; when the Cast session starts, `PlaybackEngine.attachCast` moves the current episode to the `CastPlayer` (server copy or the podcast's URL, never a local file) and the media session follows it. Needs Google Play services; without them casting is simply absent. `CastOptionsProvider` uses the default media receiver.
+
 Streaming: when the server hosts a copy of an episode (episode hosting), `PlaybackEngine` asks `Remote.streamUrl` for a signed URL and plays that; it renews the link if it expires and falls back to the podcast's own URL. Downloaded episodes play from disk.
 
 Debug builds accept launch extras for testing, e.g.

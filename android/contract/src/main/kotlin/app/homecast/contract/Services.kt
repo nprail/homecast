@@ -1,6 +1,7 @@
 package app.homecast.contract
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 
@@ -236,6 +237,14 @@ data class PlayerState(
     val progress: Float get() = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
 }
 
+/** A nearby device that can play audio from this app: a Chromecast, or a speaker or TV with Google Cast built in. */
+data class CastDevice(val id: String, val name: String)
+/**
+ * Casting. [supported] is false where Google Play services are missing. [devices] is what discovery has found while a
+ * picker is open; [connected] is the device playback is on, if any.
+ */
+data class CastState(val supported: Boolean = false, val devices: List<CastDevice> = emptyList(), val connected: CastDevice? = null)
+
 /** UI-facing player. Backed by a Media3 `MediaLibraryService` so playback survives the UI and drives Android Auto. */
 interface PlayerController {
     val state: StateFlow<PlayerState>
@@ -260,6 +269,16 @@ interface PlayerController {
     fun addBookmarkAtCurrent(title: String? = null, note: String? = null)
     /** Restore the last episode (paused) so the mini player shows after a relaunch. */
     fun restore()
+
+    // ---- casting (defaults: not supported) ----
+    val cast: StateFlow<CastState> get() = MutableStateFlow(CastState())
+    /** Look for devices (while a picker is showing). */
+    fun startCastDiscovery() {}
+    fun stopCastDiscovery() {}
+    /** Move playback to a device; it continues from the current position. */
+    fun castTo(deviceId: String) {}
+    /** Bring playback back to this phone. */
+    fun stopCasting() {}
 }
 
 data class DeviceSettings(val wifiOnly: Boolean = true, val storageCapMb: Int = 0 /* 0 = unlimited */)

@@ -195,6 +195,8 @@ struct NowPlayingView: View {
                     .accessibilityLabel("Chapters")
                 }
 
+                AirPlayButton().frame(width: 52, height: 48)
+
                 Button { sheet = .queue } label: {
                     Image(systemName: "list.bullet").font(.system(size: 19)).foregroundStyle(Brand.text).frame(minWidth: 52, minHeight: 48)
                 }

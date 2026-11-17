@@ -30,8 +30,11 @@ internal class PlayerControllerImpl(
     private var controllerFuture: ListenableFuture<MediaController>? = null
 
     override val state: StateFlow<PlayerState> = PlaybackBus.state
+    private val routes = CastRoutes(app)
+    override val cast: StateFlow<CastState> = routes.state
 
     init {
+        onMain { routes.init() }
         scope.launch {
             PlaybackBus.engine.collect { engine ->
                 if (engine != null && pending.isNotEmpty()) {
@@ -116,4 +119,17 @@ internal class PlayerControllerImpl(
             }
         }
     }
+
+    // ---- casting -------------------------------------------------------------------------------------------------
+
+    override fun startCastDiscovery() = onMain { routes.startDiscovery() }
+    override fun stopCastDiscovery() = onMain { routes.stopDiscovery() }
+
+    override fun castTo(deviceId: String) = onMain {
+        // The service must be running to take the Cast session over; start it if the app was opened to a paused player.
+        if (PlaybackBus.engine.value == null) connect()
+        routes.connect(deviceId)
+    }
+
+    override fun stopCasting() = onMain { routes.disconnect() }
 }

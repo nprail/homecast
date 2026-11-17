@@ -16,6 +16,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
+    implementation(libs.media3.cast)
+    implementation(libs.mediarouter)
     implementation(libs.media3.datasource.okhttp)
     implementation(libs.okhttp)
     implementation(libs.workmanager)
