@@ -28,6 +28,7 @@ final class Workspace {
             self.downloads.runAutoDownloads()
             self.downloads.cleanup()
             self.player.refreshSpeed()
+            Task { await self.player.resumeFromSync() }
         }
     }
 }
@@ -109,7 +110,7 @@ final class AppEnvironment {
             workspace = ws
             state = .signedIn
             ws.sync.start()
-            Task { await player.restore() }
+            Task { await player.restore(); await player.resumeFromSync() }
             onWorkspaceChange?(ws)
         } catch {
             state = .signedOut

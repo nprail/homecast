@@ -36,6 +36,7 @@ class HomecastApp : Application(), GraphProvider {
             g.downloads.runAutoDownloads()
             g.downloads.cleanup()
             g.player.refreshSpeed()
+            g.player.resumeFromSync()
         }
         scope.launch {
             g.session.state.collect { if (it is AuthState.SignedIn) g.player.restore() }

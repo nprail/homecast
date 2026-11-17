@@ -49,6 +49,7 @@ On app open, when connectivity returns, shortly after local writes (debounced), 
 Per record, **last write wins** by `clientUpdatedAt` (the server clamps future timestamps), with these exceptions:
 
 - `episodeStates.positionMs` takes the most recent **play event** (send `positionUpdatedAt`).
+- `positionUpdatedAt` is also how clients resume: the in-progress episode with the newest `positionUpdatedAt` is the one last played on any device, and a device that is not playing loads it paused. So only a real play event or a seek may set it. A paused player that saves its position again (backgrounding, closing, switching episode) must leave it alone: skip the write when the position (within 500 ms) and status are unchanged.
 - `played` beats an older progress update, but a newer explicit `unplayed` wins.
 - Playlists are replaced whole.
 

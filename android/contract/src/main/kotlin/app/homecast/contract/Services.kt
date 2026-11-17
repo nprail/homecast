@@ -267,8 +267,10 @@ interface PlayerController {
     /** Adds minutes to a running timer or restarts one (shake or tap while fading). */
     fun extendSleep(minutes: Int = 5)
     fun addBookmarkAtCurrent(title: String? = null, note: String? = null)
-    /** Restore the last episode (paused) so the mini player shows after a relaunch. */
+    /** Restore the episode last played on any device (paused) so the mini player shows after a relaunch. */
     fun restore()
+    /** After a sync: show the episode last played on any device, unless this device is playing or loading. */
+    fun resumeFromSync()
 
     // ---- casting (defaults: not supported) ----
     val cast: StateFlow<CastState> get() = MutableStateFlow(CastState())

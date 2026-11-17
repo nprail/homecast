@@ -68,6 +68,9 @@ export class Player {
   private syncTimer: ReturnType<typeof setInterval> | null = null;
   private sleepTimer: ReturnType<typeof setInterval> | null = null;
   private loadToken = 0;
+  /** Loads in flight, and the play stamp of the saved position this player reflects (to spot newer plays on other devices). */
+  private loads = 0;
+  private seenStamp = 0;
   private pendingSeekMs: number | null = null;
   /** True while the audio element plays a signed server URL (so it can be renewed if it expires). */
   private signed = false;
@@ -135,7 +138,35 @@ export class Player {
     await this.load(episodeId, { autoplay: true, context });
   }
 
+  /**
+   * Show the episode last played on any device (paused), so opening this device carries on where you stopped. Called
+   * after every sync. It never interrupts playback or a load in progress, and it ignores a device that is casting.
+   */
+  async resumeFromSync() {
+    const cur = this.state.get();
+    if (cur.playing || this.loads > 0 || cur.cast.status !== 'idle') return;
+    const latest = await this.data.lastPlayed();
+    if (!latest) return;
+    const stamp = latest.positionUpdatedAt ?? 0;
+    if (cur.episodeId === latest.episodeId) {
+      // The same episode, moved on by another device since this one last saved or loaded it.
+      if (stamp > this.seenStamp) await this.load(latest.episodeId, { autoplay: false });
+    } else {
+      const own = cur.episodeId ? await this.data.getState(cur.episodeId) : null;
+      if (stamp > (own?.positionUpdatedAt ?? 0)) await this.load(latest.episodeId, { autoplay: false, context: { label: 'Up Next' } });
+    }
+  }
+
   private async load(episodeId: string, opts: { autoplay: boolean; context?: PlayContext }) {
+    this.loads++;
+    try {
+      await this.loadNow(episodeId, opts);
+    } finally {
+      this.loads--;
+    }
+  }
+
+  private async loadNow(episodeId: string, opts: { autoplay: boolean; context?: PlayContext }) {
     const token = ++this.loadToken;
     await this.persist(true);
     const ep = await this.data.db.episodes.get(episodeId);
@@ -146,6 +177,7 @@ export class Player {
     // A device that is casting cannot read a copy saved in this browser, so it gets the server's or the podcast's URL.
     const local = this.state.get().cast.status === 'idle' ? await this.downloads.localUrl(episodeId) : null;
     if (token !== this.loadToken) return;
+    this.seenStamp = st.positionUpdatedAt ?? 0;
     // Otherwise stream from the server's hosted copy when there is one, through a signed URL.
     const hosted = local ? null : await signedStreamUrl(episodeId);
     if (token !== this.loadToken) return;
@@ -230,6 +262,7 @@ export class Player {
     const pos = Math.round(this.audio.currentTime * 1000);
     if (!Number.isFinite(pos)) return;
     await this.data.savePosition(episodeId, pos, durationMs);
+    this.seenStamp = (await this.data.getState(episodeId)).positionUpdatedAt ?? this.seenStamp;
     if (syncSoon) this.data.sync.schedule(1500);
   }
 

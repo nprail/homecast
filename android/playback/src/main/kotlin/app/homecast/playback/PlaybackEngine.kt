@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -49,6 +50,8 @@ internal class PlaybackEngine(
     /** True from `load()` until its media item is set; play/pause pressed in that window overrides the load's autoplay. */
     private var loading = false
     private var intentDuringLoad: Boolean? = null
+    /** The play stamp of the saved position this player reflects (to spot newer plays on other devices). */
+    @Volatile private var seenStamp = 0L
     /** True while ExoPlayer plays a signed URL for the server's hosted copy (so an expired link can be renewed). */
     private var playingSigned = false
     private var recoveries = 0
@@ -86,6 +89,29 @@ internal class PlaybackEngine(
     // ---- loading ---------------------------------------------------------------------------------------------
 
     /** `autoplay == null` keeps whatever play-when-ready the player already has (a MediaController `play()` may race the load). */
+    /**
+     * Show the episode last played on any device (paused), so opening this device carries on where you stopped. Called
+     * after every sync. It never interrupts playback, a load in progress or a Cast session.
+     */
+    fun resumeFromSync() {
+        if (loading || s.isPlaying || player !== exo) return
+        scope.launch {
+            val lib = library() ?: return@launch
+            val latest = runCatching { lib.continueListening(1).first().firstOrNull() }.getOrNull() ?: return@launch
+            // Re-check: the state may have changed while the query ran.
+            if (loading || s.isPlaying || player !== exo) return@launch
+            val stamp = latest.state?.positionUpdatedAt ?: 0L
+            val cur = s.episode
+            if (cur?.id == latest.id) {
+                // The same episode, moved on by another device since this one last saved or loaded it.
+                if (stamp > seenStamp) load(latest.id, autoplay = false, ctx = null)
+            } else {
+                val own = cur?.let { runCatching { lib.getState(it.id).positionUpdatedAt }.getOrNull() } ?: 0L
+                if (stamp > own) load(latest.id, autoplay = false, ctx = PlayContext())
+            }
+        }
+    }
+
     fun load(episodeId: String, autoplay: Boolean?, ctx: PlayContext?, enqueueFront: Boolean = false, allowLocal: Boolean = true) {
         val token = ++loadToken
         persist(syncSoon = false)
@@ -105,6 +131,7 @@ internal class PlaybackEngine(
                 if (token == loadToken && autoplay != false) publish { copy(error = "Episode not found") }
                 return@launch
             }
+            seenStamp = item.state?.positionUpdatedAt ?: 0L
             val settings = runCatching { lib.getSettings() }.getOrDefault(UserSettings())
             val local = if (allowLocal && player === exo) runCatching { graph()?.downloads?.fileFor(episodeId) }.getOrNull() else null
             // Not downloaded: stream the server's hosted copy through a signed URL when it has one.
@@ -278,6 +305,7 @@ internal class PlaybackEngine(
         val dur = if (s.durationMs > 0) s.durationMs else Long.MAX_VALUE / 4
         saveScope.launch {
             runCatching { library()?.savePosition(ep.id, pos, dur) }
+            runCatching { library()?.getState(ep.id)?.positionUpdatedAt }.getOrNull()?.let { seenStamp = it }
             if (syncSoon) runCatching { syncEngine()?.schedule(1500) }
         }
     }

@@ -32,10 +32,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const player = new Player(data, downloads);
     sync.onMerged = () => {
       void player.refreshSpeed();
+      void player.resumeFromSync();
       void downloads.cleanup().then(() => downloads.runAutoDownloads());
     };
     sync.start();
-    void player.restore();
+    void player.restore().then(() => player.resumeFromSync());
     const instance = { db, data, sync, downloads, player };
     setAppRef(instance);
     setApp(instance);

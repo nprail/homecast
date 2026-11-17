@@ -22,6 +22,11 @@ The web player is an installable PWA. It stores everything it shows in a local d
 | Speed | 0.5× to 3.0× in 0.1 steps with pitch correction. A podcast override wins over the global default; clear it from the player |
 | Sleep timer | 5, 15, 30, 45, 60 minutes, a custom time, or end of episode. Fades out over the last 10 s; tap (or shake on mobile) to extend |
 | Resume | position saved locally every 5 s, pushed to the server on pause, episode change and every 30 s while online |
+| Pick up where you left off | after a sync, a device that is not playing shows the episode you last played on any device, paused at its position. It never interrupts playback, and a finished episode is not brought back |
+
+### Picking up on another device
+
+Nothing extra is synced for this. Every device already syncs each episode's position, and the server keeps the time of the last play. When a device syncs, it looks for the in-progress episode (of a podcast you follow) with the newest play time. If that is not the episode loaded in the player, the player loads it paused, in the Up Next context. If it is the same episode and another device has moved on, the player jumps to the new position. Pausing, backgrounding the app or reloading the page does not count as a play, so a device you only looked at never takes over. Casting devices and a player that is playing or loading are left alone.
 
 ## Casting
 

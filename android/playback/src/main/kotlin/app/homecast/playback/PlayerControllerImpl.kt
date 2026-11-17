@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -113,12 +114,17 @@ internal class PlayerControllerImpl(
             if (state.value.hasEpisode) return@onMain
             scope.launch {
                 val lib = runCatching { graphProvider.graph.library }.getOrNull() ?: return@launch
-                val id = runCatching { lib.kvGet("player.episodeId") }.getOrNull() ?: return@launch
-                val ctx = ContextCodec.decode(runCatching { lib.kvGet("player.context") }.getOrNull())
+                val kvId = runCatching { lib.kvGet("player.episodeId") }.getOrNull()
+                // The episode last played on any device wins over the one this device last had loaded.
+                val latest = runCatching { lib.continueListening(1).first().firstOrNull() }.getOrNull()
+                val id = latest?.id ?: kvId ?: return@launch
+                val ctx = if (id == kvId) ContextCodec.decode(runCatching { lib.kvGet("player.context") }.getOrNull()) else PlayContext()
                 withEngine(start = true) { e -> if (e.state.episode == null) e.load(id, autoplay = false, ctx = ctx) }
             }
         }
     }
+
+    override fun resumeFromSync() = withEngine { it.resumeFromSync() }
 
     // ---- casting -------------------------------------------------------------------------------------------------
 

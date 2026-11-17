@@ -69,6 +69,15 @@ final class DataLayerTests: XCTestCase {
         let data = try makeData()
         data.savePosition("ep1", positionMs: 30_000, durationMs: 600_000)
         XCTAssertEqual(data.state(for: "ep1").status, .inProgress)
+        // A paused player saves again (app backgrounded). That is not a play event, so the "last played" stamp stays.
+        let stamp = data.state(for: "ep1").positionUpdatedAt
+        XCTAssertNotNil(stamp)
+        Thread.sleep(forTimeInterval: 0.02)
+        data.savePosition("ep1", positionMs: 30_200, durationMs: 600_000)
+        XCTAssertEqual(data.state(for: "ep1").positionUpdatedAt, stamp)
+        Thread.sleep(forTimeInterval: 0.02)
+        data.savePosition("ep1", positionMs: 35_000, durationMs: 600_000)
+        XCTAssertGreaterThan(data.state(for: "ep1").positionUpdatedAt ?? 0, stamp ?? 0)
         data.savePosition("ep1", positionMs: 598_000, durationMs: 600_000)
         XCTAssertEqual(data.state(for: "ep1").status, .played)
         data.markUnplayed("ep1")

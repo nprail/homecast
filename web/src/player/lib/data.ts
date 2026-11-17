@@ -47,9 +47,24 @@ export class LocalData {
     return this.patchState(episodeId, { starred });
   }
   /** Position write from the player: local only; the player schedules syncs itself. */
-  savePosition(episodeId: string, positionMs: number, durationMs: number) {
+  async savePosition(episodeId: string, positionMs: number, durationMs: number) {
     const nearEnd = durationMs > 0 && positionMs >= durationMs - 5000;
-    return this.patchState(episodeId, { positionMs, status: nearEnd ? 'played' : positionMs > 1000 ? 'inProgress' : 'unplayed', ...(nearEnd ? { playedAt: Date.now() } : {}) }, { syncSoon: false });
+    const status = nearEnd ? 'played' : positionMs > 1000 ? 'inProgress' : 'unplayed';
+    // A paused player saves again (tab hidden, episode change). That is not a play event, so it must not move the
+    // "last played" stamp that other devices use to decide what to resume.
+    const cur = await this.getState(episodeId);
+    if (cur.status === status && Math.abs(cur.positionMs - positionMs) <= 500) return;
+    await this.patchState(episodeId, { positionMs, status, ...(nearEnd ? { playedAt: Date.now() } : {}) }, { syncSoon: false });
+  }
+  /** The in-progress episode most recently played on any device (of a podcast you follow), or null. */
+  async lastPlayed(): Promise<EpisodeStateRec | null> {
+    const states = await this.db.episodeStates.where('status').equals('inProgress').filter((s) => !s.deleted).toArray();
+    states.sort((a, b) => (b.positionUpdatedAt ?? 0) - (a.positionUpdatedAt ?? 0));
+    for (const s of states) {
+      const ep = await this.db.episodes.get(s.episodeId);
+      if (ep && (await this.subscription(ep.podcastId))) return s;
+    }
+    return null;
   }
 
   // ---- subscriptions ---------------------------------------------------------------------------

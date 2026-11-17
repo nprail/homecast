@@ -49,10 +49,28 @@ final class LocalData {
     /// Position write from the player: local only; the player schedules syncs itself (spec §3.1).
     func savePosition(_ episodeId: String, positionMs: Int, durationMs: Int) {
         let nearEnd = durationMs > 0 && positionMs >= durationMs - 5000
+        let status: PlayStatus = nearEnd ? .played : positionMs > 1000 ? .inProgress : .unplayed
+        // A paused player saves again (app backgrounded, episode change). That is not a play event, so it must not move
+        // the "last played" stamp other devices use to decide what to resume.
+        let cur = state(for: episodeId)
+        if cur.status == status && abs(cur.positionMs - positionMs) <= 500 { return }
         patchState(episodeId, positionUpdated: true, syncSoon: false) {
             $0.positionMs = positionMs
-            $0.status = nearEnd ? .played : positionMs > 1000 ? .inProgress : .unplayed
+            $0.status = status
             if nearEnd { $0.playedAt = Self.nowMs() }
+        }
+    }
+
+    /// The in-progress episode most recently played on any device (of a podcast you follow), or nil.
+    func lastPlayed() -> EpisodeState? {
+        try? db.pool.read { d in
+            let subs = try d.subscribedPodcastIds()
+            let states = try EpisodeState.filter(Column("status") == PlayStatus.inProgress).filter(Column("deleted") == false)
+                .order(Column("positionUpdatedAt").desc).fetchAll(d)
+            for s in states {
+                if let ep = try Episode.fetchOne(d, key: s.episodeId), subs.contains(ep.podcastId) { return s }
+            }
+            return nil
         }
     }
 

@@ -64,6 +64,9 @@ final class Player {
     @ObservationIgnored private var recoveries = 0
     @ObservationIgnored private var wantsPlay = false
     @ObservationIgnored private var itemObserver: AnyCancellable?
+    /// Loads in flight, and the play stamp of the saved position this player reflects (to spot newer plays on other devices).
+    @ObservationIgnored private var loads = 0
+    @ObservationIgnored private var seenStamp = 0
 
     init() {
         avPlayer.automaticallyWaitsToMinimizeStalling = true
@@ -107,7 +110,27 @@ final class Player {
         await load(episodeId, autoplay: true, context: PlayContext(label: label, ids: ids))
     }
 
+    /// Show the episode last played on any device (paused), so opening this device carries on where you stopped. Called
+    /// after every sync. It never interrupts playback or a load in progress.
+    func resumeFromSync() async {
+        guard let ws = workspace, !isPlaying, loads == 0, let latest = ws.data.lastPlayed() else { return }
+        let stamp = latest.positionUpdatedAt ?? 0
+        if episode?.id == latest.episodeId {
+            // The same episode, moved on by another device since this one last saved or loaded it.
+            if stamp > seenStamp { await load(latest.episodeId, autoplay: false, context: nil) }
+        } else {
+            let own = episode.map { ws.data.state(for: $0.id).positionUpdatedAt ?? 0 } ?? 0
+            if stamp > own { await load(latest.episodeId, autoplay: false, context: .upNext) }
+        }
+    }
+
     private func load(_ episodeId: String, autoplay: Bool, context ctx: PlayContext?) async {
+        loads += 1
+        defer { loads -= 1 }
+        await loadNow(episodeId, autoplay: autoplay, context: ctx)
+    }
+
+    private func loadNow(_ episodeId: String, autoplay: Bool, context ctx: PlayContext?) async {
         guard let ws = workspace else { return }
         loadToken += 1
         let token = loadToken
@@ -118,6 +141,7 @@ final class Player {
         let settings = ws.data.settings()
         let local = ws.downloads.fileURL(for: episodeId)
         guard token == loadToken else { return }
+        seenStamp = st.positionUpdatedAt ?? 0
         // Not downloaded: stream the server's hosted copy through a signed URL when it has one.
         let hosted: URL? = local == nil ? await ws.api.signedStreamURL(for: episodeId) : nil
         guard token == loadToken else { return }
@@ -228,6 +252,7 @@ final class Player {
         let pos = Int(avPlayer.currentTime().seconds * 1000)
         guard pos >= 0 else { return }
         ws.data.savePosition(ep.id, positionMs: pos, durationMs: durationMs)
+        seenStamp = ws.data.state(for: ep.id).positionUpdatedAt ?? seenStamp
         if syncSoon { ws.sync.schedule(after: 1.5) }
     }
 

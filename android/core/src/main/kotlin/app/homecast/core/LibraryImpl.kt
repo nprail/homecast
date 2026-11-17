@@ -1,5 +1,6 @@
 package app.homecast.core
 
+import kotlin.math.abs
 import androidx.room.withTransaction
 import app.homecast.contract.*
 import app.homecast.core.db.*
@@ -163,10 +164,15 @@ class LibraryImpl(
 
     override suspend fun savePosition(episodeId: String, positionMs: Long, durationMs: Long) {
         val nearEnd = durationMs > 0 && positionMs >= durationMs - 5000
+        val status = if (nearEnd) "played" else if (positionMs > 1000) "inProgress" else "unplayed"
+        // A paused player saves again (app backgrounded, episode change). That is not a play event, so it must not move
+        // the "last played" stamp other devices use to decide what to resume.
+        val cur = dao.stateFor(episodeId)?.takeUnless { it.deleted }
+        if ((cur?.status ?: "unplayed") == status && abs((cur?.positionMs ?: 0L) - positionMs) <= 500) return
         patchState(episodeId, positionUpdated = true, syncSoon = false) {
             it.copy(
                 positionMs = positionMs,
-                status = if (nearEnd) "played" else if (positionMs > 1000) "inProgress" else "unplayed",
+                status = status,
                 playedAt = if (nearEnd) clock() else it.playedAt,
             )
         }

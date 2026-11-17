@@ -86,7 +86,15 @@ class DataLayerTest {
         lib.savePosition("e11", 30_000, 600_000)
         assertEquals(1, scheduled.size) // local only
         assertEquals(PlayStatus.InProgress, lib.getState("e11").status)
-        assertNotNull(lib.getState("e11").positionUpdatedAt)
+        val stamp = lib.getState("e11").positionUpdatedAt
+        assertNotNull(stamp)
+        // A paused player saves again (app backgrounded). That is not a play event, so the "last played" stamp stays.
+        Thread.sleep(5)
+        lib.savePosition("e11", 30_200, 600_000)
+        assertEquals(stamp, lib.getState("e11").positionUpdatedAt)
+        Thread.sleep(5)
+        lib.savePosition("e11", 35_000, 600_000)
+        assertTrue(lib.getState("e11").positionUpdatedAt!! > stamp!!)
         lib.savePosition("e11", 598_000, 600_000)
         assertEquals(PlayStatus.Played, lib.getState("e11").status)
         lib.markUnplayed("e11")
