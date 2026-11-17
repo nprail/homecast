@@ -51,6 +51,20 @@ export function transcriptRoutes(ctx: Ctx) {
       return ctx.search.transcripts(q.q, mine, q);
     });
 
+    // What a shared "moment" link points at. Lets someone who doesn't follow the podcast yet see what they were sent
+    // (public podcasts only; a private feed is visible only to its subscribers and admins, see `episodeFor`).
+    app.get<{ Params: { id: string } }>('/episodes/:id/share', { preHandler: authenticate }, async (req) => {
+      const user = userOf(req);
+      const ep = episodeFor(user, req.params.id);
+      const podcast = ctx.db.podcasts.get(ep.podcastId)!;
+      const subscribed = ctx.db.subscriptions.find({ userId: user.id, podcastId: podcast.id }).some((s) => !s.deleted);
+      return {
+        episode: { id: ep.id, title: ep.title, durationSec: ep.durationSec, releasedAt: ep.releasedAt },
+        podcast: { id: podcast.id, title: podcast.title, imageUrl: podcast.imageUrl, isPrivate: podcast.isPrivate },
+        subscribed,
+      };
+    });
+
     app.get<{ Params: { id: string } }>('/episodes/:id/chapters', { preHandler: authenticate }, async (req) => {
       const ep = episodeFor(userOf(req), req.params.id);
       const r = await ctx.chapters.get(ep);

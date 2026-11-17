@@ -42,6 +42,7 @@ All routes live under `/api/v1` and speak JSON. Authenticated routes need `Autho
 | `POST /episodes/:id/transcript` | request a transcript (deduplicated) |
 | `GET /episodes/:id/transcript` | the transcript, or `202` while it is being generated |
 | `GET /search/transcripts?q=&podcastId=&limit=&offset=` | full-text search over the transcripts of podcasts you subscribe to. `q` is 2 to 100 characters; every word must match, `"quoted phrases"` match exactly. Returns `{ total, items: [{ episodeId, podcastId, episodeTitle, podcastTitle, releasedAt, matches, hits: [{ startMs, text }] }] }`, most matches first, up to three hits per episode |
+| `GET /episodes/:id/share` | what a shared moment link points at: `{ episode: { id, title, durationSec, releasedAt }, podcast: { id, title, imageUrl, isPrivate }, subscribed }`. Public podcasts for everyone; private ones only for subscribers and admins (`404` otherwise) |
 | `GET /episodes/:id/chapters` | `{ source: "json" \| "feed" \| "description", chapters: [{ startMs, title, img?, url? }] }`, or `404` when the episode has none. The publisher's chapters file is fetched on demand (SSRF-guarded) and cached for a day |
 | `GET /jobs/:id` | job status (the requester, attached users and admins) |
 | `GET /proxy/audio?url=` | authenticated audio proxy, web app only; supports `Range`. Serves the server's own copy when episode hosting has one |

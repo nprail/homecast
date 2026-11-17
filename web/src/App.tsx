@@ -31,7 +31,7 @@ function RequireAdmin() {
   const { user, loading } = useAuth();
   const loc = useLocation();
   if (loading) return <Loading />;
-  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname)}`} replace />;
+  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
   if (user.role !== 'admin')
     return (
       <div className="mx-auto max-w-md px-6 py-24 text-center">

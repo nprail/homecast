@@ -7,6 +7,7 @@ import { clock, minutesLeft, remaining, speedText } from '../lib/format';
 import { useDesktop, useDownloadedSet, useEpisodes, useQueueIds, usePodcastMap } from '../lib/hooks';
 import { openApp } from '../lib/appRef';
 import { useLayer } from '../lib/backStack';
+import { shareMoment } from '../lib/share';
 import { toast, ui } from '../lib/ui';
 import { Art } from './Art';
 import { Bookmark, CheckCircle, ChevronDown, ChevronLeft, Lines, MoreH, Moon, PauseIcon, PlayIcon, Search, Skip } from './picons';
@@ -294,7 +295,10 @@ function TranscriptPanel() {
               <div className="min-w-0 flex-1">
                 <p onClick={() => player.seekTo(Math.max(0, s.startMs - TRANSCRIPT_LEAD_MS))} className={`m-0 cursor-pointer text-[17px] leading-[26px] ${isActive ? 'font-medium text-p-text' : 'text-p-muted'}`}>{highlight(s.text, needle)}</p>
                 {isActive && (
-                  <button onClick={async () => { await bookmarkLine(episode.id, s.startMs, s.text); }} className="mt-2.5 inline-flex h-8 items-center gap-1.5 rounded-full border border-p-amber bg-transparent px-3 text-[13px] font-semibold text-p-amber"><Bookmark size={16} />Bookmark this line</button>
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    <button onClick={async () => { await bookmarkLine(episode.id, s.startMs, s.text); }} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-p-amber bg-transparent px-3 text-[13px] font-semibold text-p-amber"><Bookmark size={16} />Bookmark this line</button>
+                    <button onClick={() => void shareMoment({ episodeId: episode.id, title: episode.title, podcastTitle: podcast?.title, positionMs: s.startMs, quote: s.text })} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-p-line bg-transparent px-3 text-[13px] font-semibold text-p-text">Share this line</button>
+                  </div>
                 )}
               </div>
             </div>

@@ -5,6 +5,7 @@ import type { EpisodeRec, EpisodeStateRec, PodcastRec } from '../lib/db';
 import { ago, lengthText, minutesLeft, plural } from '../lib/format';
 import { useDownloadedSet, usePlaylists, usePodcastMap, useStates } from '../lib/hooks';
 import type { PlayContext } from '../lib/player';
+import { shareMoment } from '../lib/share';
 import { toast, ui } from '../lib/ui';
 import { Art } from './Art';
 import { CheckCircle, Download, MoreV, PauseIcon, PlayIcon, StarFilled } from './picons';
@@ -96,6 +97,7 @@ export function EpisodeMenu() {
   const downloaded = useDownloadedSet().has(id ?? '');
   const pods = usePodcastMap();
   if (!id || !ep) return null;
+  const playingThis = player.state.get().episodeId === id;
   const close = () => ui.set({ menuEpisodeId: null });
   const act = (fn: () => unknown, msg?: string) => async () => {
     close();
@@ -109,6 +111,7 @@ export function EpisodeMenu() {
     [state?.status === 'played' ? 'Mark as unplayed' : 'Mark as played', () => (state?.status === 'played' ? data.markUnplayed(id) : data.markPlayed(id))],
     [state?.starred ? 'Remove star' : 'Star episode', () => data.toggleStar(id, !state?.starred)],
     [downloaded ? 'Remove download' : 'Download', () => (downloaded ? downloads.remove(id) : downloads.enqueue(id)), downloaded ? 'Download removed' : 'Downloading…'],
+    [playingThis ? 'Share this moment' : 'Share episode', () => shareMoment({ episodeId: id, title: ep.title, podcastTitle: pods.get(ep.podcastId)?.title, positionMs: playingThis ? player.state.get().positionMs : undefined })],
     ['Open episode', () => nav(`/episode/${id}`)],
     ['Go to podcast', () => nav(`/podcast/${ep.podcastId}`)],
   ];

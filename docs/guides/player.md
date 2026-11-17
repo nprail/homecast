@@ -29,6 +29,18 @@ When an episode has chapters, the player shows the current chapter under the tit
 
 Chapters come from, in order: the publisher's Podcasting 2.0 chapters file (`<podcast:chapters>`), chapters written into the feed (Podlove Simple Chapters), or a list of timestamps in the show notes (like `00:00 Intro`), which is used only when there are at least three, in order, starting near the beginning. Chapters embedded inside the audio file itself are not read.
 
+## Sharing a moment
+
+Share an episode, or a specific moment in it, with other people on your server. In the web player use **More → Share this moment** (it uses the current position), the **Share** button on an episode page, or **Share this line** on a transcript line, which also quotes the line. The native apps have the same options from the player menu, the episode menu and transcript lines.
+
+The link looks like `https://your-server/episode/ID?t=754` and opens the web player at that time. Someone who is signed in but doesn't follow the podcast yet sees what was shared and can follow it and start playing in one tap (private podcasts are only visible to people who already follow them). Someone who isn't signed in is asked to sign in first and then lands on the same moment. The links open in the browser, not in the native apps.
+
+## Notifications for new episodes
+
+The Android and iOS apps can notify you when a podcast you follow publishes a new episode. Turn it on under **Settings → Notifications**, then choose per podcast with the bell in the podcast's menu (on by default; the choice syncs across your devices).
+
+A self-hosted server has no push service, so the app checks for new episodes itself in the background and notifies you about anything released since its last check. The phone decides when background checks run (about hourly on Android, a few times a day on iOS, and less often in battery saver), so a notification can arrive some time after the episode is published. Opening the app marks everything on screen as seen, so you are not notified twice. Tapping a notification opens the episode. The web player does not send notifications.
+
 ## Up Next, playlists and smart playlists
 
 - **Up Next** is the built-in queue. Use *Play next* or *Play last* from any episode menu and reorder with the drag handle (or the arrow keys on the handle).

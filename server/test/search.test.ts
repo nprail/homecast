@@ -83,3 +83,24 @@ describe('transcript search', () => {
     expect((await a.app.inject({ method: 'GET', url: '/api/v1/search/transcripts?q=tomatoes' })).statusCode).toBe(401);
   });
 });
+
+describe('shared moment preview', () => {
+  const share = (s: Session, id: string) => a.app.inject({ method: 'GET', url: `/api/v1/episodes/${id}/share`, headers: bearer(s) });
+
+  it('shows a public episode to someone who does not follow the podcast yet', async () => {
+    const r = await share(maya, ids.g1!);
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ episode: { id: ids.g1, title: 'Tomatoes' }, podcast: { id: ids.garden, title: 'Gardening Hour', isPrivate: false }, subscribed: false });
+    expect((await share(admin, ids.g1!)).json().subscribed).toBe(true);
+  });
+
+  it('hides private feeds from people who do not follow them, and needs a login', async () => {
+    const p = a.ctx.db.podcasts.get(ids.garden!)!;
+    p.isPrivate = true;
+    a.ctx.db.podcasts.save(p);
+    expect((await share(maya, ids.g1!)).statusCode).toBe(404);
+    expect((await share(admin, ids.g1!)).statusCode).toBe(200);
+    expect((await a.app.inject({ method: 'GET', url: `/api/v1/episodes/${ids.g1}/share` })).statusCode).toBe(401);
+    expect((await share(maya, 'no-such-episode')).statusCode).toBe(404);
+  });
+});
