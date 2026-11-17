@@ -72,6 +72,13 @@ struct LibraryView: View {
         })
     }
 
+    private func openPending() {
+        guard let r = ui.pendingRoute else { return }
+        ui.pendingRoute = nil
+        path = NavigationPath()
+        path.append(r)
+    }
+
     private let columns = [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 16)]
 
     var body: some View {
@@ -105,6 +112,8 @@ struct LibraryView: View {
             .refreshable { await ws.sync.sync() }
             .brandScreen()
             .routes()
+            .onAppear { openPending() }
+            .onChange(of: ui.pendingRoute) { _, _ in openPending() }
             .onAppear {
                 #if DEBUG
                 if let r = ProcessInfo.processInfo.environment["HC_ROUTE"] {

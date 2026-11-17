@@ -1,8 +1,10 @@
+import BackgroundTasks
 import Foundation
 import GRDB
 import Network
 import Observation
 import UIKit
+import UserNotifications
 
 /// Observes connectivity (Wi-Fi-only downloads, "connectivity regained" sync trigger).
 @MainActor @Observable
@@ -243,6 +245,122 @@ final class SyncEngine {
                 }
             }
             try ack(EpisodeState.self); try ack(Bookmark.self); try ack(Playlist.self); try ack(SmartPlaylist.self); try ack(UserSettings.self); try ack(Subscription.self)
+        }
+    }
+}
+
+
+// MARK: - New episode notifications
+//
+// A self-hosted server has no push service, so the app asks for new episodes itself: a background refresh syncs, and
+// anything released since the last check (in a podcast whose bell is on) becomes a local notification. iOS decides when
+// background refreshes run (often a few times a day), so these can arrive later than the episode itself.
+
+extension DeviceSettings {
+    /// Notify about new episodes on this device (the per-podcast bell is synced; this switch is per device).
+    static var notifyNewEpisodes: Bool {
+        get { UserDefaults.standard.bool(forKey: "hc.notifyNew") }
+        set { UserDefaults.standard.set(newValue, forKey: "hc.notifyNew") }
+    }
+}
+
+/// Carries a tapped notification to the UI.
+@MainActor @Observable
+final class NotificationRouter {
+    static let shared = NotificationRouter()
+    var episodeId: String?
+}
+
+final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        guard let id = response.notification.request.content.userInfo["episodeId"] as? String else { return }
+        await MainActor.run { NotificationRouter.shared.episodeId = id }
+    }
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions { [.banner, .sound] }
+}
+
+@MainActor
+enum NewEpisodeNotifier {
+    static let taskId = "app.homecast.refresh"
+    private static let delegate = NotificationDelegate()
+    private static let maxSeen = 400
+
+    /// Call once at launch.
+    static func register() {
+        UNUserNotificationCenter.current().delegate = delegate
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: taskId, using: nil) { task in
+            guard let task = task as? BGAppRefreshTask else { return }
+            Task { @MainActor in await handle(task) }
+        }
+    }
+
+    /// Ask the system for permission; on success start tracking from now so old episodes don't flood in.
+    static func enable() async -> Bool {
+        let center = UNUserNotificationCenter.current()
+        let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        guard granted else { return false }
+        DeviceSettings.notifyNewEpisodes = true
+        AppEnvironment.shared.workspace?.db.setKV("notify.since", String(Int(Date().timeIntervalSince1970 * 1000)))
+        schedule()
+        return true
+    }
+    static func disable() {
+        DeviceSettings.notifyNewEpisodes = false
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: taskId)
+    }
+    static func authorizationDenied() async -> Bool { await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .denied }
+
+    /// Ask iOS for a refresh in about 30 minutes (it may run later, or not at all if the phone is idle or in Low Power Mode).
+    static func schedule() {
+        guard DeviceSettings.notifyNewEpisodes else { return }
+        let req = BGAppRefreshTaskRequest(identifier: taskId)
+        req.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)
+        try? BGTaskScheduler.shared.submit(req)
+    }
+
+    private static func handle(_ task: BGAppRefreshTask) async {
+        schedule() // keep the chain going
+        let work = Task { @MainActor in
+            // Launched in the background: the workspace restores asynchronously, so give it a moment.
+            for _ in 0 ..< 40 where AppEnvironment.shared.workspace == nil { try? await Task.sleep(for: .milliseconds(250)) }
+            guard let ws = AppEnvironment.shared.workspace else { return false }
+            await ws.sync.sync()
+            await check(ws, notify: true)
+            return true
+        }
+        task.expirationHandler = { work.cancel() }
+        task.setTaskCompleted(success: await work.value)
+    }
+
+    /// Look for episodes released since the last check in podcasts with the bell on. With `notify: false` they are only
+    /// marked as seen (used when the app is open: you don't need a banner for what is on screen).
+    static func check(_ ws: Workspace, notify: Bool) async {
+        guard DeviceSettings.notifyNewEpisodes else { return }
+        let nowMs = Int(Date().timeIntervalSince1970 * 1000)
+        guard let since = ws.db.kv("notify.since").flatMap(Int.init) else { ws.db.setKV("notify.since", String(nowMs)); return }
+        var seen = ws.db.kvJSON("notify.seen", as: [String].self) ?? []
+        let seenSet = Set(seen)
+        struct Fresh { var episode: Episode; var podcast: String }
+        let fresh: [Fresh] = (try? await ws.db.pool.read { d in
+            let podcastIds = try Subscription.filter(Column("deleted") == false).filter(Column("newEpisodeNotify") == true).fetchAll(d).map(\.podcastId)
+            guard !podcastIds.isEmpty else { return [] }
+            let eps = try Episode.filter(podcastIds.contains(Column("podcastId"))).filter(Column("releasedAt") > since).order(Column("releasedAt").desc).limit(100).fetchAll(d)
+            let played = Set(try EpisodeState.filter(keys: eps.map { RecordID.state(userId: ws.user.id, episodeId: $0.id) }).filter(Column("status") == PlayStatus.played).fetchAll(d).map(\.episodeId))
+            let titles = Dictionary(uniqueKeysWithValues: try Podcast.filter(keys: podcastIds).fetchAll(d).map { ($0.id, $0.title) })
+            return eps.filter { !played.contains($0.id) && !seenSet.contains($0.id) && $0.releasedAt < nowMs + 86_400_000 }.map { Fresh(episode: $0, podcast: titles[$0.podcastId] ?? "New episode") }
+        }) ?? []
+        guard !fresh.isEmpty else { return }
+        seen.append(contentsOf: fresh.map(\.episode.id))
+        ws.db.setKVJSON("notify.seen", Array(seen.suffix(maxSeen)))
+        guard notify, await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .authorized else { return }
+        for (podcastId, group) in Dictionary(grouping: fresh, by: \.episode.podcastId) {
+            let content = UNMutableNotificationContent()
+            content.title = group[0].podcast
+            content.body = group.count == 1 ? group[0].episode.title : "\(group.count) new episodes: " + group.prefix(2).map(\.episode.title).joined(separator: ", ") + (group.count > 2 ? "…" : "")
+            content.sound = .default
+            content.threadIdentifier = podcastId
+            content.userInfo = ["episodeId": group[0].episode.id]
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "new-\(podcastId)-\(group[0].episode.id)", content: content, trigger: nil))
         }
     }
 }

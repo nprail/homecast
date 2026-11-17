@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.sp
 import app.homecast.android.ui.LocalAppUi
 import app.homecast.android.ui.LocalGraph
+import app.homecast.android.ui.share.shareMoment
 import app.homecast.contract.EpisodeItem
 import app.homecast.contract.PlayStatus
 import app.homecast.contract.QueuePosition
@@ -107,6 +108,12 @@ fun EpisodeMenu(item: EpisodeItem, expanded: Boolean, onDismiss: () -> Unit) {
         DropdownMenuItem({ Text("Play next") }, leadingIcon = { Icon(Icons.Outlined.PlaylistAdd, null) }, onClick = { act("Playing next") { graph.library.enqueue(item.id, QueuePosition.Next, playing) } })
         DropdownMenuItem({ Text("Add to Up Next") }, leadingIcon = { Icon(Icons.Outlined.QueueMusic, null) }, onClick = { act("Added to Up Next") { graph.library.enqueue(item.id, QueuePosition.Last) } })
         DropdownMenuItem({ Text("Add to playlist…") }, leadingIcon = { Icon(Icons.Outlined.LibraryAdd, null) }, onClick = { onDismiss(); ui.playlistPickerEpisodeId = item.id })
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val playingThis = playing == item.id
+        DropdownMenuItem(
+            { Text(if (playingThis) "Share this moment" else "Share episode") }, leadingIcon = { Icon(Icons.Outlined.Share, null) },
+            onClick = { onDismiss(); context.shareMoment(graph.session.serverUrl, item.id, item.episode.title, item.podcast?.title, if (playingThis) graph.player.state.value.positionMs else null) },
+        )
         HorizontalDivider()
         if (item.status == PlayStatus.Played) DropdownMenuItem({ Text("Mark as unplayed") }, leadingIcon = { Icon(Icons.Outlined.RadioButtonUnchecked, null) }, onClick = { act { graph.library.markUnplayed(item.id) } })
         else DropdownMenuItem({ Text("Mark as played") }, leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) }, onClick = { act { graph.library.markPlayed(item.id) } })

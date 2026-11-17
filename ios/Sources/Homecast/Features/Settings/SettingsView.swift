@@ -14,6 +14,8 @@ struct SettingsView: View {
     @State private var exportFile: ExportFile?
     @State private var showPassword = false
     @State private var confirmSignOut = false
+    @State private var notifyOn = DeviceSettings.notifyNewEpisodes
+    @State private var notifyDenied = false
 
     var body: some View {
         NavigationStack {
@@ -41,6 +43,20 @@ struct SettingsView: View {
                         Text("\(Fmt.plural(settings.podcastSpeeds.count, "podcast")) with their own speed. Set or clear these from a podcast's menu.").font(.footnote).foregroundStyle(Brand.muted)
                     }
                 } header: { Text("Playback") } footer: { Text("Synced across your devices. A podcast's own speed overrides this default.") }
+
+                Section {
+                    Toggle("New episode notifications", isOn: $notifyOn).tint(Brand.accent)
+                        .onChange(of: notifyOn) { _, on in
+                            Task {
+                                if on {
+                                    if await !NewEpisodeNotifier.enable() { notifyOn = false; notifyDenied = await NewEpisodeNotifier.authorizationDenied() }
+                                } else { NewEpisodeNotifier.disable() }
+                            }
+                        }
+                    if notifyDenied, let url = URL(string: UIApplication.openSettingsURLString) {
+                        Link(destination: url) { Label("Turn on notifications for Homecast in Settings", systemImage: "bell.badge") }.font(.footnote)
+                    }
+                } header: { Text("Notifications") } footer: { Text("Homecast checks for new episodes in the background and notifies you about podcasts with the bell on (set it from a podcast's menu). iOS decides when it runs, so a notification can arrive some time after the episode is published.") }
 
                 Section {
                     Toggle("Download on Wi-Fi only", isOn: $wifiOnly).tint(Brand.accent).onChange(of: wifiOnly) { _, v in DeviceSettings.wifiOnly = v }

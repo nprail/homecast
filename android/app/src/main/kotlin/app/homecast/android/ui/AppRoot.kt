@@ -105,6 +105,12 @@ private fun MainShell() {
     val currentTab = Tab.entries.firstOrNull { t -> backStack?.destination?.hierarchy?.any { it.route == t.route } == true }
 
     DebugHooks(appNav, ui)
+    // A tapped "new episode" notification opens that episode.
+    LaunchedEffect(Unit) {
+        app.homecast.android.notify.PendingOpen.episodeId.collect { id ->
+            if (id != null) { app.homecast.android.notify.PendingOpen.episodeId.value = null; ui.showPlayer = false; appNav.episode(id) }
+        }
+    }
     CompositionLocalProvider(LocalAppUi provides ui) {
         Box(Modifier.fillMaxSize()) {
             Scaffold(

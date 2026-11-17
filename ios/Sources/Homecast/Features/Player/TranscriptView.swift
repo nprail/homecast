@@ -91,6 +91,10 @@ private struct TranscriptLines: View {
     let transcript: Transcript
     @Binding var query: String
     let embedded: Bool
+    @State private var meta: (title: String, podcast: String?) = ("Episode", nil)
+    private var episodeId: String { transcript.episodeId }
+    private var episodeTitle: String { meta.title }
+    private var podcastTitle: String? { meta.podcast }
 
     private var isCurrentEpisode: Bool { ws.player.episode?.id == transcript.episodeId }
     private var currentIndex: Int? {
@@ -116,6 +120,7 @@ private struct TranscriptLines: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 6) {
                         ForEach(lines, id: \.0) { idx, seg in
+                            HStack(alignment: .top, spacing: 4) {
                             Button { if isCurrentEpisode { ws.player.seek(toMs: seg.startMs) } } label: {
                                 HStack(alignment: .top, spacing: 12) {
                                     Text(Fmt.clock(seg.startMs)).font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(Brand.muted).frame(width: 44, alignment: .leading).padding(.top, 3)
@@ -125,13 +130,32 @@ private struct TranscriptLines: View {
                                 .padding(.vertical, 8).padding(.horizontal, 12).frame(maxWidth: .infinity, alignment: .leading)
                                 .background(idx == currentIndex ? Brand.accent.opacity(0.16) : .clear, in: .rect(cornerRadius: 14))
                             }
-                            .buttonStyle(.plain).id(idx)
+                            .buttonStyle(.plain)
+                            if idx == currentIndex {
+                                ShareMomentLink(episodeId: episodeId, title: episodeTitle, podcast: podcastTitle, positionMs: seg.startMs, quote: seg.text) {
+                                    Image(systemName: "square.and.arrow.up").font(.system(size: 15, weight: .semibold)).foregroundStyle(Brand.accent).frame(width: 40, height: 40)
+                                }
+                                .accessibilityLabel("Share this line")
+                            }
+                            }
+                            .contextMenu {
+                                ShareMomentLink(episodeId: episodeId, title: episodeTitle, podcast: podcastTitle, positionMs: seg.startMs, quote: seg.text) { Label("Share This Line", systemImage: "square.and.arrow.up") }
+                            }
+                            .id(idx)
                         }
                     }
                     .padding(.horizontal, 12).padding(.bottom, 12)
                 }
                 .onChange(of: currentIndex) { _, new in if let new, query.isEmpty { withAnimation(.easeInOut) { proxy.scrollTo(new, anchor: .center) } } }
             }
+        }
+        .task(id: transcript.episodeId) {
+            let id = transcript.episodeId
+            let found = try? await ws.db.pool.read { d -> (String, String?)? in
+                guard let e = try Episode.fetchOne(d, key: id) else { return nil }
+                return (e.title, try Podcast.fetchOne(d, key: e.podcastId)?.title)
+            }
+            if let found { meta = (found.0, found.1) }
         }
     }
 

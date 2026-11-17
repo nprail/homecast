@@ -8,6 +8,8 @@ final class UIState {
     var showTranscript = false
     var playlistPickerEpisodeId: String?
     var showAddPodcast = false
+    /// A screen to open on the Library tab (a tapped notification sets this).
+    var pendingRoute: Route?
     var bookmarkEditor: BookmarkTarget?
     struct BookmarkTarget: Identifiable { let id = UUID(); var episodeId: String; var positionMs: Int; var existing: Bookmark? }
 }
@@ -88,6 +90,10 @@ struct EpisodeMenu: View {
         Button { ws.data.enqueue(item.id, .next, currentId: ws.player.episode?.id); Toaster.shared.show("Playing next") } label: { Label("Play Next", systemImage: "text.insert") }
         Button { ws.data.enqueue(item.id, .last); Toaster.shared.show("Added to Up Next") } label: { Label("Add to Up Next", systemImage: "text.badge.plus") }
         Button { ui.playlistPickerEpisodeId = item.id } label: { Label("Add to Playlist…", systemImage: "music.note.list") }
+        let playingThis = ws.player.episode?.id == item.id
+        ShareMomentLink(episodeId: item.id, title: item.episode.title, podcast: item.podcast?.title, positionMs: playingThis ? ws.player.positionMs : nil) {
+            Label(playingThis ? "Share This Moment" : "Share Episode", systemImage: "square.and.arrow.up")
+        }
         Divider()
         if item.status == .played {
             Button { ws.data.markUnplayed(item.id) } label: { Label("Mark as Unplayed", systemImage: "circle") }

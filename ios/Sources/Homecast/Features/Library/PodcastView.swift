@@ -118,6 +118,7 @@ struct PodcastView: View {
                 Label("Oldest first", systemImage: "arrow.up").tag(false)
             }
             if let sub = s.subscription {
+                Button { ws.data.setNotify(podcastId, !sub.newEpisodeNotify) } label: { Label(sub.newEpisodeNotify ? "Turn Off Notifications" : "Turn On Notifications", systemImage: sub.newEpisodeNotify ? "bell.slash" : "bell") }
                 Menu("Auto-download", systemImage: "arrow.down.circle") {
                     let current = sub.autoDownload
                     Button { ws.data.setAutoDownload(podcastId, .init(mode: .off)) } label: { check("Off", current.mode == .off) }

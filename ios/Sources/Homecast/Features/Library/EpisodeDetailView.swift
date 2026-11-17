@@ -94,6 +94,16 @@ struct EpisodeDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let item = snap.value.item {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareMomentLink(episodeId: item.id, title: item.episode.title, podcast: item.podcast?.title, positionMs: ws.player.episode?.id == item.id ? ws.player.positionMs : nil) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share")
+                }
+            }
+        }
         .task { chapters = await ws.loadChapters(episodeId) }
         .brandScreen()
     }

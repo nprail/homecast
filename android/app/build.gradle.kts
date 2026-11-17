@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.okhttp)
     implementation(libs.okhttp)
+    implementation(libs.workmanager)
     debugImplementation(libs.media3.session)
     debugImplementation(libs.coroutines.guava)
     "stagingImplementation"(libs.media3.session)

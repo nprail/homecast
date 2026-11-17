@@ -53,7 +53,17 @@ struct MainTabs: View {
         .sheet(isPresented: $ui.showAddPodcast) { AddPodcastSheet().environment(ws) }
         .sheet(item: $ui.bookmarkEditor) { BookmarkSheet(target: $0).environment(ws) }
         .sheet(item: Binding(get: { ui.playlistPickerEpisodeId.map(IDBox.init) }, set: { ui.playlistPickerEpisodeId = $0?.id })) { PlaylistPickerSheet(episodeId: $0.id).environment(ws) }
-        .onAppear { debugHooks() }
+        .onAppear { debugHooks(); openNotificationTarget() }
+        .onChange(of: NotificationRouter.shared.episodeId) { _, _ in openNotificationTarget() }
+    }
+
+    /// A tapped "new episode" notification opens that episode on the Library tab.
+    private func openNotificationTarget() {
+        guard let id = NotificationRouter.shared.episodeId else { return }
+        NotificationRouter.shared.episodeId = nil
+        ui.showPlayer = false
+        tab = .library
+        ui.pendingRoute = .episode(id)
     }
 }
 

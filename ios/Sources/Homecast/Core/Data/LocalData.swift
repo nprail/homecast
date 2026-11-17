@@ -61,6 +61,13 @@ final class LocalData {
     func subscription(for podcastId: String) -> Subscription? {
         (try? db.pool.read { try Subscription.filter(Column("podcastId") == podcastId).filter(Column("deleted") == false).fetchOne($0) }) ?? nil
     }
+    func setNotify(_ podcastId: String, _ on: Bool) {
+        guard var s = subscription(for: podcastId) else { return }
+        s.newEpisodeNotify = on
+        s.clientUpdatedAt = Self.nowMs()
+        try? db.pool.write { try queue($0, "subscriptions", s) }
+        scheduleSync()
+    }
     func setAutoDownload(_ podcastId: String, _ value: AutoDownload) {
         guard var s = subscription(for: podcastId) else { return }
         s.autoDownload = value

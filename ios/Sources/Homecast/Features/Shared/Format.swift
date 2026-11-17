@@ -1,3 +1,4 @@
+import SwiftUI
 import Foundation
 
 enum Fmt {
@@ -45,5 +46,41 @@ enum Fmt {
         s = s.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
         for (k, v) in ["&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&nbsp;": " ", "&apos;": "'"] { s = s.replacingOccurrences(of: k, with: v) }
         return s.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+/// A shareable "moment": a link that opens an episode in this server's web player, at a time if one is given.
+@MainActor
+enum Moment {
+    /// `https://your-server/episode/ID?t=SECONDS`. nil only if the saved server address is unusable.
+    static func url(episodeId: String, positionMs: Int? = nil) -> URL? {
+        let base = AppEnvironment.shared.serverURLString.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        guard !base.isEmpty else { return nil }
+        let t = (positionMs ?? 0) >= 1000 ? "?t=\((positionMs ?? 0) / 1000)" : ""
+        return URL(string: "\(base)/episode/\(episodeId)\(t)")
+    }
+
+    /// The words that go with the link: a quote if there is one, then where it is from.
+    static func message(title: String, podcast: String?, positionMs: Int? = nil, quote: String? = nil) -> String {
+        let at = (positionMs ?? 0) >= 1000 ? " (\(Fmt.clock(positionMs ?? 0)))" : ""
+        let from = title + (podcast.map { ", \($0)" } ?? "") + at
+        if let q = quote?.trimmingCharacters(in: .whitespacesAndNewlines), !q.isEmpty { return "\u{201C}\(q.prefix(280))\u{201D} \u{2014} \(from)" }
+        return from
+    }
+}
+
+/// Share sheet button for an episode, optionally at a moment and with a quoted transcript line.
+struct ShareMomentLink<Label: View>: View {
+    let episodeId: String
+    let title: String
+    var podcast: String?
+    var positionMs: Int?
+    var quote: String?
+    @ViewBuilder var label: () -> Label
+
+    var body: some View {
+        if let url = Moment.url(episodeId: episodeId, positionMs: positionMs) {
+            ShareLink(item: url, subject: Text(title), message: Text(Moment.message(title: title, podcast: podcast, positionMs: positionMs, quote: quote))) { label() }
+        }
     }
 }

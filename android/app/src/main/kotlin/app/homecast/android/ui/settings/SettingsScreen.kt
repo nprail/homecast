@@ -163,6 +163,28 @@ fun SettingsScreen(nav: AppNav) {
                     )
                 }
             }
+            // ---- Notifications
+            item {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                var on by remember { mutableStateOf(app.homecast.android.notify.NewEpisodes.enabled(context)) }
+                val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                    if (granted) { scope.launch { app.homecast.android.notify.NewEpisodes.enable(context, graph); on = true } }
+                    else toast("Notifications are off for Homecast. Turn them on in system settings.")
+                }
+                Group("Notifications", footer = "Homecast checks for new episodes in the background and notifies you about podcasts with the bell on (set it from a podcast's menu). Android decides when it runs, so a notification can arrive some time after the episode is published.") {
+                    ListItem(
+                        headlineContent = { Text("New episode notifications") },
+                        trailingContent = {
+                            Switch(on, { want ->
+                                if (!want) { app.homecast.android.notify.NewEpisodes.disable(context); on = false }
+                                else if (android.os.Build.VERSION.SDK_INT >= 33 && !app.homecast.android.notify.NewEpisodes.canPost(context)) ask.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                else scope.launch { app.homecast.android.notify.NewEpisodes.enable(context, graph); on = true }
+                            })
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    )
+                }
+            }
             // ---- This device
             item {
                 Group("This device", footer = "Oldest played episodes are removed first when the cap is reached.") {

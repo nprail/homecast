@@ -12,10 +12,25 @@ struct HomecastApp: App {
         UINavigationBar.appearance().titleTextAttributes = [.font: UIFont(name: "SpaceGrotesk-Bold", size: 17) ?? .systemFont(ofSize: 17, weight: .bold)]
     }
 
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
             RootView()
                 .preferredColorScheme(.dark)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                // Whatever arrived while you were away is on screen now: record it as seen so it isn't announced later.
+                Task { @MainActor in
+                    guard let ws = AppEnvironment.shared.workspace else { return }
+                    await ws.sync.sync()
+                    await NewEpisodeNotifier.check(ws, notify: false)
+                }
+            case .background: NewEpisodeNotifier.schedule()
+            default: break
+            }
         }
     }
 }
@@ -23,6 +38,7 @@ struct HomecastApp: App {
 /// Routes scene sessions: the CarPlay role gets its template scene; everything else is the SwiftUI window.
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        NewEpisodeNotifier.register()
         _ = AppEnvironment.shared // CarPlay can launch the app with no phone UI: start the session and player now
         return true
     }

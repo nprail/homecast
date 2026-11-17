@@ -29,6 +29,7 @@ import app.homecast.android.ui.AppNav
 import app.homecast.android.ui.LocalGraph
 import app.homecast.android.ui.components.EmptyState
 import app.homecast.android.ui.components.Fmt
+import app.homecast.android.ui.share.shareMoment
 import app.homecast.contract.ApiException
 import app.homecast.contract.OfflineException
 import app.homecast.contract.TranscriptSegment
@@ -167,6 +168,8 @@ private fun TranscriptLines(episodeId: String, segments: List<TranscriptSegment>
         if (currentIdx >= 0 && q.isEmpty() && !dragging) listState.animateScrollToItem((currentIdx - 1).coerceAtLeast(0))
     }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val shareItem by remember(episodeId) { graph.library.episode(episodeId) }.collectAsStateWithLifecycle(null)
     Column(Modifier.fillMaxSize()) {
         if (showSearch) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -205,7 +208,12 @@ private fun TranscriptLines(episodeId: String, segments: List<TranscriptSegment>
                             highlight(seg.text, q), style = MaterialTheme.typography.bodyLarge,
                             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                             color = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
                         )
+                        if (active || highlighted) IconButton(
+                            onClick = { shareItem?.let { context.shareMoment(graph.session.serverUrl, episodeId, it.episode.title, it.podcast?.title, seg.startMs, seg.text) } },
+                            Modifier.size(36.dp),
+                        ) { Icon(Icons.Outlined.Share, "Share this line", Modifier.size(20.dp)) }
                     }
                 }
             }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import app.homecast.contract.Chapter
+import app.homecast.android.ui.share.shareMoment
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -212,6 +213,8 @@ private fun PlayerTopBar(st: PlayerState, onClose: () -> Unit, nav: AppNav) {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More options") }
             DropdownMenu(menu, { menu = false }) {
                 st.podcast?.let { p -> DropdownMenuItem({ Text("Go to podcast") }, leadingIcon = { Icon(Icons.Outlined.Podcasts, null) }, onClick = { menu = false; onClose(); nav.podcast(p.id) }) }
+                val context = androidx.compose.ui.platform.LocalContext.current
+                DropdownMenuItem({ Text("Share this moment") }, leadingIcon = { Icon(Icons.Outlined.Share, null) }, onClick = { menu = false; context.shareMoment(graph.session.serverUrl, episode.id, episode.title, st.podcast?.title, st.positionMs) })
                 DropdownMenuItem({ Text("Episode details") }, leadingIcon = { Icon(Icons.Outlined.Info, null) }, onClick = { menu = false; onClose(); nav.episode(episode.id) })
                 DropdownMenuItem({ Text("Full transcript") }, leadingIcon = { Icon(Icons.Outlined.Subject, null) }, onClick = { menu = false; onClose(); nav.transcript(episode.id) })
                 DropdownMenuItem({ Text("Add to playlist…") }, leadingIcon = { Icon(Icons.Outlined.LibraryAdd, null) }, onClick = { menu = false; ui.playlistPickerEpisodeId = episode.id })

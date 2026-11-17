@@ -101,6 +101,8 @@ interface Library {
 
     // ---- writes: subscriptions & settings
     suspend fun setAutoDownload(podcastId: String, value: AutoDownload)
+    /** Turn the "notify me about new episodes" bell on or off for a podcast (synced across your devices). */
+    suspend fun setNotifyNewEpisodes(podcastId: String, on: Boolean)
     suspend fun unsubscribe(podcastId: String)
     suspend fun ensureSubscriptionLocal(podcastId: String)
     suspend fun setDefaultSpeed(speed: Double)

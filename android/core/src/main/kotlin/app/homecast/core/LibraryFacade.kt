@@ -62,6 +62,7 @@ class LibraryFacade(private val session: Session, private val workspaces: Worksp
     override suspend fun updateEpisodeDuration(episodeId: String, durationSec: Double) = cur().updateEpisodeDuration(episodeId, durationSec)
 
     override suspend fun setAutoDownload(podcastId: String, value: AutoDownload) = cur().setAutoDownload(podcastId, value)
+    override suspend fun setNotifyNewEpisodes(podcastId: String, on: Boolean) = cur().setNotifyNewEpisodes(podcastId, on)
     override suspend fun unsubscribe(podcastId: String) = cur().unsubscribe(podcastId)
     override suspend fun ensureSubscriptionLocal(podcastId: String) = cur().ensureSubscriptionLocal(podcastId)
     override suspend fun setDefaultSpeed(speed: Double) = cur().setDefaultSpeed(speed)

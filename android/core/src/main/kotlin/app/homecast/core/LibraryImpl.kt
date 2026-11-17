@@ -184,6 +184,14 @@ class LibraryImpl(
         scheduleSync()
     }
 
+    override suspend fun setNotifyNewEpisodes(podcastId: String, on: Boolean) {
+        db.withTransaction {
+            val s = dao.liveSubscription(podcastId) ?: return@withTransaction
+            queueSub(s.copy(newEpisodeNotify = on, clientUpdatedAt = clock()))
+        }
+        scheduleSync()
+    }
+
     override suspend fun unsubscribe(podcastId: String) {
         db.withTransaction {
             val s = dao.liveSubscription(podcastId) ?: return@withTransaction

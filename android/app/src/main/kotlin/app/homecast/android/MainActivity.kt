@@ -7,6 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import android.content.Intent
+import app.homecast.android.notify.NewEpisodes
+import app.homecast.android.notify.PendingOpen
 import app.homecast.android.ui.AppRoot
 import app.homecast.android.ui.LocalGraph
 import app.homecast.android.ui.theme.HomecastTheme
@@ -23,6 +26,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         val graph = (application as GraphProvider).graph
+        intent.getStringExtra(PendingOpen.EXTRA)?.let { PendingOpen.episodeId.value = it }
+        NewEpisodes.schedule(this)
         if (BuildConfig.DEBUG) {
             // Test hook: adb shell am start -n app.homecast.android/.MainActivity --es autologin "server,user,password"
             DebugHook.run(this, graph)
@@ -33,6 +38,25 @@ class MainActivity : ComponentActivity() {
         setContent {
             HomecastTheme {
                 CompositionLocalProvider(LocalGraph provides graph) { AppRoot() }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra(PendingOpen.EXTRA)?.let { PendingOpen.episodeId.value = it }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Whatever arrived while you were away is on screen now: record it as seen so it isn't announced later.
+        val graph = (application as GraphProvider).graph
+        lifecycleScope.launch {
+            runCatching {
+                if (graph.session.state.first { it !is AuthState.Launching } is AuthState.SignedIn) {
+                    graph.sync.sync()
+                    NewEpisodes.check(this@MainActivity, graph, notify = false)
+                }
             }
         }
     }

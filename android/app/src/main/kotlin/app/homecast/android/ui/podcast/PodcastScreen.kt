@@ -80,6 +80,11 @@ fun PodcastScreen(podcastId: String, nav: AppNav) {
                     if (sub != null) Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More options") }
                         DropdownMenu(menu, { menu = false }) {
+                            DropdownMenuItem(
+                                { Text(if (sub.newEpisodeNotify) "Turn off notifications" else "Turn on notifications") },
+                                leadingIcon = { Icon(if (sub.newEpisodeNotify) Icons.Outlined.NotificationsOff else Icons.Filled.Notifications, null) },
+                                onClick = { menu = false; scope.launch { lib.setNotifyNewEpisodes(podcastId, !sub.newEpisodeNotify); ui.toast(if (sub.newEpisodeNotify) "Notifications turned off for this podcast" else "Notifications turned on for this podcast") } },
+                            )
                             DropdownMenuItem({ Text("Auto-download") }, leadingIcon = { Icon(Icons.Outlined.DownloadForOffline, null) }, onClick = { menu = false; dialog = Dialog.AutoDownload })
                             DropdownMenuItem({ Text("Delete played after…") }, leadingIcon = { Icon(Icons.Outlined.AutoDelete, null) }, onClick = { menu = false; dialog = Dialog.Cleanup })
                             DropdownMenuItem({ Text("Playback speed") }, leadingIcon = { Icon(Icons.Outlined.Speed, null) }, onClick = { menu = false; dialog = Dialog.Speed })
