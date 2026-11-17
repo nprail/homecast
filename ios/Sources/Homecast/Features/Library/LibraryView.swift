@@ -285,6 +285,7 @@ struct TranscriptSearchView: View {
     @State private var shownQuery = ""
     @State private var loading = false
     @State private var error: String?
+    @FocusState private var searchFocused: Bool
 
     /// Start a little before the matched line so the sentence is heard from its start.
     private static let leadMs = 1500
@@ -311,7 +312,13 @@ struct TranscriptSearchView: View {
         }
         .navigationTitle("Search Transcripts")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "What was said")
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "What was said")
+        .searchFocused($searchFocused)
+        .task {
+            // Focus once the push animation has finished, so the keyboard comes up with the page.
+            try? await Task.sleep(for: .milliseconds(450))
+            searchFocused = true
+        }
         .overlay { if loading && result == nil { ProgressView() } }
         .task(id: q) { await run(q) }
         .brandScreen()
