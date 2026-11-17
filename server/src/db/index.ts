@@ -4,21 +4,28 @@ import type {
   AuditLogEntry, Bookmark, Episode, EpisodeChapters, EpisodeState, Invite, Job, Playlist, Podcast, RefreshToken, ResetToken,
   EpisodeMirror, ServerSettings, SmartPlaylist, Subscription, Transcript, UsageStat, User, UserSettings,
 } from './types.js';
+import { DocstoreBackend } from './docstore.js';
 import { LokiBackend, listBackupFiles } from './loki.js';
 import type { Backend, EngineName, Repo } from './repo.js';
 import { SqliteBackend } from './sqlite.js';
 import { clean } from '../util/misc.js';
 
 export type { EngineName, Query, Repo } from './repo.js';
-export const ENGINES: readonly EngineName[] = ['loki', 'sqlite'];
+export const ENGINES: readonly EngineName[] = ['loki', 'sqlite', 'docstore'];
+
+/** Where each engine keeps its data inside the data directory. */
+export const localPath = (engine: EngineName, dataDir: string): string =>
+  path.join(dataDir, engine === 'loki' ? 'homecast.db.json' : engine === 'sqlite' ? 'homecast.db.sqlite' : 'homecast.docstore');
 
 export interface DbOptions {
   dataDir: string;
   /** In-memory only (tests). */
   memory?: boolean;
   autosaveMs?: number;
-  /** `loki` (default): in memory with a JSON file. `sqlite`: on disk, needs Node.js 22.5+. */
+  /** `loki` (default): in memory with a JSON file. `sqlite`: on disk, needs Node.js 22.5+. `docstore`: in memory with a journal. */
   engine?: EngineName;
+  /** Skip the one-time import of another engine's database when this one is new (for tools that copy explicitly). */
+  noImport?: boolean;
 }
 
 export class Database {
@@ -59,7 +66,7 @@ export class Database {
     this.invites = col<Invite>('invites', ['codeHash'], []);
     this.resetTokens = col<ResetToken>('resetTokens', ['tokenHash'], []);
     this.podcasts = col<Podcast>('podcasts', ['feedUrl'], ['rev'], true);
-    this.episodes = col<Episode>('episodes', [], ['podcastId', 'rev', 'guid', 'audioUrl', 'createdAt'], true, [['podcastId', 'rev']]);
+    this.episodes = col<Episode>('episodes', [], ['podcastId', 'rev', 'audioUrl', 'createdAt'], true, [['podcastId', 'rev']]);
     this.transcripts = col<Transcript>('transcripts', ['episodeId'], []);
     this.subscriptions = col<Subscription>('subscriptions', [], ['userId', 'podcastId', 'rev'], true, [['userId', 'rev']]);
     this.episodeStates = col<EpisodeState>('episodeStates', [], ['userId', 'episodeId', 'rev'], true, [['userId', 'rev']]);
@@ -76,21 +83,21 @@ export class Database {
   }
 
   static async open(opts: DbOptions): Promise<Database> {
-    if ((opts.engine ?? 'loki') === 'sqlite') {
-      const sqliteFile = path.join(opts.dataDir, 'homecast.db.sqlite');
-      const lokiFile = path.join(opts.dataDir, 'homecast.db.json');
-      const firstRun = !opts.memory && !existsSync(sqliteFile);
-      const db = new Database(SqliteBackend.open(opts));
-      // Switching an existing server to SQLite: bring the data over once. The JSON file is left untouched.
-      if (firstRun && existsSync(lokiFile)) {
-        const old = await Database.open({ dataDir: opts.dataDir, autosaveMs: 0, engine: 'loki' });
+    const engine = opts.engine ?? 'loki';
+    if (engine === 'loki') return new Database(await LokiBackend.open(opts));
+    const firstRun = !opts.memory && !opts.noImport && !existsSync(localPath(engine, opts.dataDir));
+    const db = new Database(engine === 'sqlite' ? SqliteBackend.open(opts) : await DocstoreBackend.open(opts));
+    // Switching an existing server to this engine: bring the data over once. The old database is left untouched.
+    if (firstRun) {
+      const from = (['loki', 'sqlite', 'docstore'] as const).find((e) => e !== engine && existsSync(localPath(e, opts.dataDir)));
+      if (from) {
+        const old = await Database.open({ dataDir: opts.dataDir, autosaveMs: 0, engine: from });
         const n = copyDatabase(old, db);
         await old.close();
-        process.stderr.write(`Imported ${n} records from ${lokiFile} into ${sqliteFile}. The JSON file was not changed.\n`);
+        process.stderr.write(`Imported ${n} records from ${localPath(from, opts.dataDir)} into ${localPath(engine, opts.dataDir)}. The old database was not changed.\n`);
       }
-      return db;
     }
-    return new Database(await LokiBackend.open(opts));
+    return db;
   }
 
   get engine(): EngineName {

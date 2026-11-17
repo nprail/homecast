@@ -185,7 +185,7 @@ export function listBackupFiles(dataDir: string): { name: string; bytes: number;
   const dir = path.join(dataDir, 'backups');
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter((n) => /^(homecast|podsync)-.*\.(json|sqlite)$/.test(n))
+    .filter((n) => /^(homecast|podsync)-.*\.(json|sqlite|docstore)$/.test(n))
     .map((name) => {
       const st = statSync(path.join(dir, name));
       return { name, bytes: st.size, mtime: st.mtimeMs };

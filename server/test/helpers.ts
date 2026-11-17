@@ -7,10 +7,16 @@ import { buildApp, type App } from '../src/app.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { Database } from '../src/db/index.js';
 
+/** The engine the suite runs on: `HC_TEST_DB=sqlite` or `docstore` (default `loki`). */
+export function testEngine(): 'loki' | 'sqlite' | 'docstore' {
+  const e = process.env.HC_TEST_DB;
+  return e === 'sqlite' || e === 'docstore' ? e : 'loki';
+}
+
 export async function startApp(overrides: Partial<Config> = {}, env: NodeJS.ProcessEnv = {}): Promise<App> {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'homecast-test-'));
   const config = loadConfig({ DATA_DIR: dataDir, ALLOW_PRIVATE_NETWORKS: 'true', PUBLIC_URL: 'http://localhost:8080', ...env }, { webDir: null, startWorkers: false, ...overrides });
-  const db = await Database.open({ dataDir, memory: true, engine: process.env.HC_TEST_DB === 'sqlite' ? 'sqlite' : 'loki' });
+  const db = await Database.open({ dataDir, memory: true, engine: testEngine() });
   return buildApp(config, { db, logger: false });
 }
 

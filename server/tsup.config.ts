@@ -8,5 +8,5 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   // Bundle the workspace package; keep real dependencies external.
-  noExternal: ['@homecast/shared'],
+  noExternal: ['@homecast/shared', '@homecast/docstore'],
 });

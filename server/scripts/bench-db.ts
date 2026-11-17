@@ -2,7 +2,7 @@
  * Compares the storage engines on a large library.
  *
  *   npx tsx scripts/bench-db.ts compare --scale medium          # seeds and measures both engines, prints a table
- *   npx tsx scripts/bench-db.ts compare --scale large --engines sqlite
+ *   npx tsx scripts/bench-db.ts compare --scale large --engines sqlite,docstore
  *   npx tsx scripts/bench-db.ts seed --engine sqlite --dir /tmp/db --scale medium    (one step on its own)
  *   npx tsx scripts/bench-db.ts run  --engine sqlite --dir /tmp/db
  *
@@ -312,7 +312,7 @@ function child(step: 'seed' | 'run', engine: EngineName, dir: string): Record<st
 const fmt = (n: number | undefined, unit = 'ms') => (n === undefined ? 'n/a' : n >= 100 ? `${Math.round(n).toLocaleString('en-US')} ${unit}` : n >= 10 ? `${n.toFixed(0)} ${unit}` : `${n.toFixed(1)} ${unit}`);
 
 async function compare(): Promise<void> {
-  const engines = (opt('engines', 'loki,sqlite') ?? 'loki,sqlite').split(',') as EngineName[];
+  const engines = (opt('engines', 'loki,sqlite,docstore') ?? 'loki,sqlite,docstore').split(',') as EngineName[];
   const results: Record<string, Record<string, number> | { error: string }> = {};
   for (const e of engines) {
     const dir = mkdtempSync(path.join(tmpdir(), `homecast-bench-${e}-`));

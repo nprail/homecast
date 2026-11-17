@@ -36,7 +36,7 @@ export interface Repo<T extends { id: string }> {
   insertRaw(doc: T): void;
 }
 
-export type EngineName = 'loki' | 'sqlite';
+export type EngineName = 'loki' | 'sqlite' | 'docstore';
 
 /** A storage engine: creates collections and owns persistence, the revision counter and backups. */
 export interface Backend {

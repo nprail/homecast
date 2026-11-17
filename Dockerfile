@@ -37,11 +37,13 @@ FROM node:26-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 COPY shared/package.json shared/
+COPY docstore/package.json docstore/
 COPY server/package.json server/
 COPY web/package.json web/
 RUN npm ci
 COPY tsconfig.base.json ./
 COPY shared shared
+COPY docstore docstore
 COPY server server
 COPY web web
 RUN npm run build
@@ -51,6 +53,7 @@ FROM node:26-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 COPY shared/package.json shared/
+COPY docstore/package.json docstore/
 COPY server/package.json server/
 COPY web/package.json web/
 RUN npm ci --omit=dev --workspace=server --include-workspace-root=false

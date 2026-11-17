@@ -24,17 +24,17 @@ export interface Config {
   /** Redirects followed when fetching feeds and audio (each hop is re-validated). */
   maxRedirects: number;
   /** Storage engine: `loki` (default) or `sqlite`. */
-  dbEngine: 'loki' | 'sqlite';
+  dbEngine: 'loki' | 'sqlite' | 'docstore';
   logLevel: string;
   maxEpisodesPerFeed: number;
   startWorkers: boolean;
 }
 
-function parseDbEngine(raw: string | undefined): 'loki' | 'sqlite' {
+function parseDbEngine(raw: string | undefined): 'loki' | 'sqlite' | 'docstore' {
   const v = (raw ?? '').trim().toLowerCase();
   if (v === '') return 'loki';
-  if (v === 'loki' || v === 'sqlite') return v;
-  throw new Error('DB_ENGINE must be "loki" or "sqlite"');
+  if (v === 'loki' || v === 'sqlite' || v === 'docstore') return v;
+  throw new Error('DB_ENGINE must be "loki", "sqlite" or "docstore"');
 }
 
 function parseMaxRedirects(raw: string | undefined): number {

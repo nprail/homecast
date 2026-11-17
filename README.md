@@ -78,7 +78,7 @@ The image runs as a non-root user with a read-only root filesystem (only `/data`
 | `WEB_DIR` | `../web/dist` | Static dashboard |
 | `MAX_EPISODES_PER_FEED` | `5000` | |
 | `MAX_REDIRECTS` | `10` | Redirects followed for feeds/audio (0 to 30); each hop is re-validated |
-| `DB_ENGINE` | `loki` | `loki` (in memory, JSON file) or `sqlite` (on disk); see the storage guide before switching |
+| `DB_ENGINE` | `loki` | `loki` (in memory, JSON file), `sqlite` (on disk) or `docstore` (in memory with a journal); see the storage guide before switching |
 | `ALLOW_PRIVATE_NETWORKS` | `false` | Tests/dev only: disables the SSRF guard's address blocking |
 | `LOG_LEVEL` | `info` | |
 
@@ -90,7 +90,8 @@ The docs live in `docs/` and are built with [docmd](https://docmd.io): `npm run 
 
 ```
 shared/   zod schemas for the API and sync protocol, smart-playlist evaluator + vectors/
-server/   Fastify + LokiJS (src/db is the thin repository layer), services/, routes/
+server/   Fastify server (src/db is the repository layer over LokiJS, SQLite or docstore), services/, routes/
+docstore/ Our own in-memory document store with a crash-safe journal (a standalone package)
 web/      React 19 + Vite + Tailwind v4 admin dashboard
 deploy/   docker-compose.yml (plain HTTP), docker-compose.caddy.yml (HTTPS with Caddy), docker-compose.dev.yml (build from source)
 logo/     Homecast logo sources (the PWA icons are rendered from logo/homecast-app-icon.svg by web/scripts/make-icons.mjs)

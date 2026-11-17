@@ -24,7 +24,7 @@ description: "Environment variables and runtime settings."
 | `LOG_LEVEL` | `info` | |
 | `DISABLE_WORKERS` | unset | `true` disables the feed poller, transcript queue and maintenance |
 | `MAX_REDIRECTS` | `10` | Redirects followed when fetching feeds, audio and transcripts (0 to 30). Each hop is re-checked by the SSRF guard. Raise it if downloads fail with "Too many redirects" |
-| `DB_ENGINE` | `loki` | Storage engine: `loki` (in memory, saved to a JSON file) or `sqlite` (on disk, needs Node.js 22.5 or newer). See [Storage engines](/guides/storage) before changing it |
+| `DB_ENGINE` | `loki` | Storage engine: `loki` (in memory, saved to a JSON file), `sqlite` (on disk, needs Node.js 22.5 or newer) or `docstore` (in memory with a journal, no size limit). See [Storage engines](/guides/storage) before changing it |
 | `ALLOW_PRIVATE_NETWORKS` | `false` | **tests and development only**: disables the SSRF guard's address blocking |
 
 ## Settings in the dashboard
