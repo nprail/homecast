@@ -14,6 +14,7 @@
   },
   "workspaces": [
     "shared",
+    "docstore",
     "server",
     "web"
   ],
@@ -22,8 +23,8 @@
     "dev:web": "npm run dev -w web",
     "build": "npm run build -w web && npm run build -w server",
     "start": "npm run start -w server",
-    "test": "npm test -w shared && npm test -w server",
-    "typecheck": "npm run typecheck -w shared && npm run typecheck -w server && npm run typecheck -w web",
+    "test": "npm test -w shared && npm test -w docstore && npm test -w server",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w docstore && npm run typecheck -w server && npm run typecheck -w web",
     "audit": "npm audit --audit-level=high",
     "docs:dev": "docmd dev",
     "docs:build": "docmd build"

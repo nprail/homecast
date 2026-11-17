@@ -1,0 +1,47 @@
+{
+  "title": "docstore",
+  "url": "https://nprail.github.io/homecast/docstore/",
+  "src": "docs",
+  "out": "site",
+  "engine": "js",
+  "favicon": "/assets/images/favicon.svg",
+  "layout": {
+    "spa": true,
+    "header": { "enabled": true },
+    "sidebar": { "collapsible": true, "defaultCollapsed": false },
+    "optionsMenu": { "position": "sidebar-top", "components": { "search": true, "themeSwitch": true } },
+    "footer": { "style": "minimal", "content": "docstore. An in-memory document store with a crash-safe journal.", "branding": false }
+  },
+  "theme": { "name": "default", "appearance": "system", "codeHighlight": true },
+  "minify": true,
+  "autoTitleFromH1": true,
+  "copyCode": true,
+  "pageNavigation": true,
+  "navigation": [
+    { "title": "Overview", "path": "/", "icon": "house" },
+    {
+      "title": "Guides",
+      "icon": "book-open",
+      "collapsible": false,
+      "children": [
+        { "title": "Getting started", "path": "/guides/getting-started" },
+        { "title": "Queries and indexes", "path": "/guides/queries" },
+        { "title": "Durability and backups", "path": "/guides/durability" },
+        { "title": "Moving from Loki", "path": "/guides/from-loki" }
+      ]
+    },
+    {
+      "title": "Reference",
+      "icon": "library",
+      "collapsible": false,
+      "children": [
+        { "title": "API", "path": "/reference/api" },
+        { "title": "File format", "path": "/reference/format" },
+        { "title": "Benchmarks", "path": "/reference/benchmarks" },
+        { "title": "Limits", "path": "/reference/limits" }
+      ]
+    },
+    { "title": "GitHub", "path": "https://github.com/nprail/homecast/tree/main/docstore", "icon": "github", "external": true }
+  ],
+  "plugins": { "seo": { "defaultDescription": "docstore: a small in-memory document store with indexes and a crash-safe journal, in pure JavaScript." }, "ai": false }
+}
