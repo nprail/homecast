@@ -121,6 +121,8 @@ export const transcriptSearchQuery = z.object({
 export interface TranscriptHit {
   startMs: number;
   text: string;
+  /** Matched stretches of `text` as `[start, end]` offsets (UTF-16 code units, end exclusive). Absent from older servers. */
+  marks?: [number, number][];
 }
 export interface TranscriptSearchItem {
   episodeId: string;

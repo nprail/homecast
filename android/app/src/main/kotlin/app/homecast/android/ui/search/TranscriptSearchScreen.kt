@@ -31,6 +31,7 @@ import app.homecast.android.ui.LocalGraph
 import app.homecast.android.ui.components.EmptyState
 import app.homecast.android.ui.components.Fmt
 import app.homecast.contract.OfflineException
+import app.homecast.contract.TranscriptHit
 import app.homecast.contract.TranscriptSearchItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -51,9 +52,12 @@ private sealed interface Found {
 private fun terms(q: String): List<String> =
     Regex("\"([^\"]+)\"|(\\S+)").findAll(q).map { (it.groups[1]?.value ?: it.groups[2]?.value ?: "").trim() }.filter { it.isNotEmpty() }.toList()
 
-private fun highlighted(text: String, q: String, color: androidx.compose.ui.graphics.Color): AnnotatedString = buildAnnotatedString {
+/** Marks from the server when it sends them (it knows about word forms and typos); older servers get the typed words marked. */
+private fun highlighted(hit: TranscriptHit, q: String, color: androidx.compose.ui.graphics.Color): AnnotatedString = buildAnnotatedString {
+    val text = hit.text
     val ranges = mutableListOf<IntRange>()
-    for (t in terms(q)) {
+    for (m in hit.marks) if (m.first >= 0 && m.last < text.length && m.first <= m.last) ranges += m
+    if (hit.marks.isEmpty()) for (t in terms(q)) {
         var from = 0
         while (true) {
             val i = text.indexOf(t, from, ignoreCase = true)
@@ -119,7 +123,7 @@ fun TranscriptSearchScreen(nav: AppNav) {
                 shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
             when (val f = found) {
-                Found.Idle -> EmptyState(Icons.Outlined.ManageSearch, "Find a moment in any episode", "Only episodes that have a transcript are searched. Use quotes to match an exact phrase.")
+                Found.Idle -> EmptyState(Icons.Outlined.ManageSearch, "Find a moment in any episode", "Only episodes that have a transcript are searched. Other forms of a word and small typos match. Use quotes for an exact phrase and a minus sign to leave a word out.")
                 Found.Loading -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 is Found.Failed -> EmptyState(if (f.offline) Icons.Outlined.WifiOff else Icons.Outlined.SearchOff, if (f.offline) "You're offline" else "Search failed", f.message)
                 is Found.Results ->
@@ -138,7 +142,7 @@ fun TranscriptSearchScreen(nav: AppNav) {
                                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                                         ) {
                                             Text(Fmt.clock(h.startMs), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(48.dp))
-                                            Text(highlighted(h.text, f.query, MaterialTheme.colorScheme.tertiary), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                            Text(highlighted(h, f.query, MaterialTheme.colorScheme.tertiary), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                                         }
                                     }
                                     if (item.matches > item.hits.size) Text("+${item.matches - item.hits.size} more in the transcript", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

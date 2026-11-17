@@ -98,7 +98,7 @@ npm run bench:db -- --scale large --engines sqlite,docstore
 | Idle sync poll | 0.4 ms | 0.5 ms | 0.5 ms |
 | Push 25 play positions | 4.7 ms | 5.8 ms | 0.8 ms |
 | A new device pulls a heavy library | 192 ms | 534 ms | 201 ms |
-| Transcript search | 75 ms | 87 ms | 78 ms |
+| Transcript search (full-text index) | 16 ms | 18 ms | 17 ms |
 | Admin overview | 2.4 ms | 4.8 ms | 0.8 ms |
 | Admin feeds list | 8.5 ms | 4.1 ms | 1.4 ms |
 | Single record writes per second | 8,658 | 8,145 | 61,456 |
@@ -111,7 +111,7 @@ npm run bench:db -- --scale large --engines sqlite,docstore
 | Idle sync poll | fails | 0.8 ms | 0.3 ms |
 | Push 25 play positions | fails | 6.4 ms | 0.7 ms |
 | A new device pulls a heavy library | fails | 2.5 s | 0.8 s |
-| Transcript search | fails | 208 ms | 201 ms |
+| Transcript search (full-text index) | fails | 56 ms | 51 ms |
 | Admin overview | fails | 30 ms | 1.3 ms |
 | Single record writes per second | fails | 6,748 | 58,122 |
 | Periodic save, longest stall | fails | 0 ms | 1.4 ms |
@@ -126,7 +126,7 @@ At the large scale the default engine builds the database but fails when it save
 - **`docstore` is the fastest at writing**, by a wide margin, and the only engine whose write speed does not fall as the library grows.
 - **`docstore` and the default are equal on reads** (they are both in memory); SQLite is a few times slower on the requests that read a lot, such as a new device's first sync.
 - **SQLite wins on memory and start-up**, `docstore` loses on start-up to the default, and by more as the library grows: it checks every record and builds its indexes while loading.
-- **Transcript search is the same on every engine** (200 ms at 600 transcripts). It scans every line of every transcript, which no storage engine speeds up; a full-text index would.
+- **Transcript search is the same on every engine**, because it does not use the engine: it has its own in-memory full-text index (see [Transcripts](/guides/transcripts)). It used to scan every line of every transcript (75 to 200 ms at 300 to 600 transcripts); the index answers in 16 to 56 ms here, with ranking, phrases and typo tolerance. The benchmark's transcripts are made of a small word list, so every query word is in most lines, which is a hard case; a typical query on real transcripts takes about a millisecond. The index adds memory on every engine, including SQLite (about 17 MB per 100 hours of transcripts).
 
 ### The standalone benchmark of the library
 

@@ -78,7 +78,7 @@ class RemoteImpl(private val api: ApiClient, private val library: Library) : Rem
             TranscriptSearchItem(
                 episodeId = i.str("episodeId") ?: "", podcastId = i.str("podcastId") ?: "", episodeTitle = i.str("episodeTitle") ?: "",
                 podcastTitle = i.str("podcastTitle") ?: "", releasedAt = i.num("releasedAt")?.toLong() ?: 0, matches = i.num("matches")?.toInt() ?: 0,
-                hits = (i["hits"] as? JsonArray).orEmpty().map { h -> val j = h.obj(); TranscriptHit(j.num("startMs")?.toLong() ?: 0, j.str("text") ?: "") },
+                hits = (i["hits"] as? JsonArray).orEmpty().map { h -> val j = h.obj(); TranscriptHit(j.num("startMs")?.toLong() ?: 0, j.str("text") ?: "", (j["marks"] as? JsonArray).orEmpty().mapNotNull { m -> (m as? JsonArray)?.let { a -> a.getOrNull(0)?.jsonPrimitive?.intOrNull?.let { s -> a.getOrNull(1)?.jsonPrimitive?.intOrNull?.let { e -> s until e } } } }) },
             )
         }
     }

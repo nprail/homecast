@@ -158,7 +158,8 @@ data class OpmlResult(val imported: Int, val failed: Int, val alreadySubscribed:
 data class Chapter(val startMs: Long, val title: String)
 
 /** One matching line of a transcript, with where it starts. */
-data class TranscriptHit(val startMs: Long, val text: String)
+/** `marks` are the matched stretches of `text` (UTF-16 offsets, end exclusive); empty from older servers. */
+data class TranscriptHit(val startMs: Long, val text: String, val marks: List<IntRange> = emptyList())
 /** An episode whose transcript matches a search. `hits` holds the first few lines; `matches` counts all of them. */
 data class TranscriptSearchItem(
     val episodeId: String, val podcastId: String, val episodeTitle: String, val podcastTitle: String,

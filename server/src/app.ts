@@ -171,6 +171,7 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
     maintenance.stop();
     autoTranscribe.stop();
     // Let background work finish its last writes before the database closes.
+    ctx.search.stop();
     await Promise.allSettled([ctx.poller.stop(), transcripts.stop(), mirror.stop()]);
     usage.stop();
     await app.close();
@@ -185,6 +186,7 @@ export function startWorkers({ ctx, maintenance }: App): void {
   ctx.usage.start();
   ctx.poller.start();
   ctx.transcripts.start();
+  ctx.search.warm();
   ctx.autoTranscribe.start();
   ctx.mirror.start();
   maintenance.start();

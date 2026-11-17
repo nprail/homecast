@@ -1,5 +1,5 @@
 import type { TranscriptSearchItem, TranscriptSearchResponse } from '@homecast/shared';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { get } from '../../lib/api';
 import { useApp } from '../AppData';
@@ -13,12 +13,26 @@ import { ui } from '../lib/ui';
 const LEAD_MS = 1500;
 const MIN_CHARS = 2;
 
-/** Wrap the matched words in <mark>. Quoted phrases are kept whole, like the server does. */
-function Highlight({ text, q }: { text: string; q: string }) {
+const MARK = 'rounded-sm bg-p-amber-soft px-0.5 text-p-amber';
+
+/** Wrap the stretches the server says matched in <mark>. Older servers send none; then the typed words are marked, quoted phrases kept whole. */
+function Highlight({ text, q, marks }: { text: string; q: string; marks?: [number, number][] }) {
+  if (marks) {
+    const out: ReactNode[] = [];
+    let at = 0;
+    marks.forEach(([s, e], i) => {
+      if (s < at || e > text.length) return;
+      if (s > at) out.push(text.slice(at, s));
+      out.push(<mark key={i} className={MARK}>{text.slice(s, e)}</mark>);
+      at = e;
+    });
+    out.push(text.slice(at));
+    return <>{out}</>;
+  }
   const terms = [...q.matchAll(/"([^"]+)"|(\S+)/g)].map((m) => (m[1] ?? m[2] ?? '').trim()).filter(Boolean);
   if (!terms.length) return <>{text}</>;
   const re = new RegExp(`(${terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
-  return <>{text.split(re).map((part, i) => (i % 2 ? <mark key={i} className="rounded-sm bg-p-amber-soft px-0.5 text-p-amber">{part}</mark> : part))}</>;
+  return <>{text.split(re).map((part, i) => (i % 2 ? <mark key={i} className={MARK}>{part}</mark> : part))}</>;
 }
 
 /** Search the transcripts of every podcast you follow. Needs the server, since transcripts are not all stored on the device. */
@@ -64,7 +78,7 @@ export function SearchPage() {
         <label htmlFor="tsearch-all" className="sr-only">Search transcripts</label>
         <input id="tsearch-all" type="search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder='Search what was said, e.g. "slow fermentation"' autoComplete="off" className="min-w-0 flex-1 border-0 bg-transparent text-base text-p-text outline-none placeholder:text-p-muted/60" />
       </div>
-      <p className="mt-2 mb-0 text-xs text-p-muted">Searches the transcripts of your podcasts. Use quotes to match an exact phrase.</p>
+      <p className="mt-2 mb-0 text-xs text-p-muted">Searches the transcripts of your podcasts. Finds other forms of a word and small typos. Use quotes for an exact phrase and a minus sign to leave a word out.</p>
       {!online && <p role="status" className="mt-4 text-sm text-p-muted">You're offline. Search needs a connection to the server.</p>}
       {error && <p role="alert" className="mt-4 text-sm text-p-danger">{error}</p>}
       {needle.length < MIN_CHARS && !error && <EmptyState title="Find a moment in any episode">Only episodes that have a transcript are searched. Open an episode's transcript to generate one.</EmptyState>}
@@ -78,7 +92,7 @@ export function SearchPage() {
               {item.hits.map((h) => (
                 <button key={h.startMs} onClick={() => void open(item, h.startMs)} className="mt-2 flex w-full gap-3 rounded-xl border-0 bg-p-bg px-3 py-2.5 text-left text-p-text">
                   <span className="w-12 shrink-0 text-[13px] leading-5 font-semibold text-p-accent tnum">{clock(h.startMs)}</span>
-                  <span className="min-w-0 flex-1 text-sm leading-5"><Highlight text={h.text} q={result.q} /></span>
+                  <span className="min-w-0 flex-1 text-sm leading-5"><Highlight text={h.text} q={result.q} marks={h.marks} /></span>
                 </button>
               ))}
               {item.matches > item.hits.length && <div className="mt-2 text-xs text-p-muted">+{item.matches - item.hits.length} more in the transcript</div>}

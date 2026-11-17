@@ -1,73 +1,89 @@
 import type { TranscriptSearchItem, TranscriptSearchResponse } from '@homecast/shared';
 import type { Database } from '../db/index.js';
+import { TranscriptIndex } from '../search/index.js';
 
 const HITS_PER_EPISODE = 3;
-const SNIPPET_MAX = 240;
-
-/** Lower-case only: cheap enough to run over every transcript line on each query. */
-const fold = (s: string) => s.toLowerCase();
-
-/** Words, plus "quoted phrases" kept whole. Every term must appear for a line to match. */
-export function searchTerms(q: string): string[] {
-  const terms: string[] = [];
-  const re = /"([^"]+)"|(\S+)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(q))) {
-    const t = fold((m[1] ?? m[2] ?? '').replace(/\s+/g, ' ').trim());
-    if (t.length) terms.push(t);
-  }
-  return [...new Set(terms)].slice(0, 8);
-}
-
-function snippet(text: string, terms: string[]): string {
-  if (text.length <= SNIPPET_MAX) return text;
-  const at = Math.max(0, fold(text).indexOf(terms[0] ?? ''));
-  const start = Math.max(0, Math.min(at - 60, text.length - SNIPPET_MAX));
-  return `${start > 0 ? '…' : ''}${text.slice(start, start + SNIPPET_MAX)}${start + SNIPPET_MAX < text.length ? '…' : ''}`;
-}
+const SLICE_MS = 12;
 
 /**
- * Full-text search over transcripts. A scan, not an index: transcripts are plain arrays in memory
- * and a family-sized library is a few hundred episodes, so a query takes milliseconds to tens of ms.
+ * Full-text search over transcripts, ranked, with phrases, `-excluded` words, prefix matching on the last word and
+ * typo tolerance (see `search/index.ts`). The index is built in small slices after start-up, kept current as
+ * transcripts are added and removed, and finished on the spot if a search arrives before it is ready.
  */
 export class SearchService {
-  constructor(private db: Database) {}
+  readonly index: TranscriptIndex;
+  private todo: { id: string; episodeId: string }[] | null = null;
+  private touched = new Set<string>();
+  private timer: NodeJS.Immediate | null = null;
+  private stopped = false;
+  private built = false;
+
+  constructor(private db: Database) {
+    this.index = new TranscriptIndex((episodeId) => db.transcripts.findOne({ episodeId })?.segments ?? null);
+    db.onTranscriptChange((c) => {
+      this.touched.add(c.doc.episodeId);
+      if (c.kind === 'remove') this.index.remove(c.doc.episodeId);
+      else this.index.add(c.doc.episodeId, c.doc.segments);
+    });
+  }
+
+  /** Start building the index in the background. */
+  warm(): void {
+    if (this.todo || this.built || this.stopped) return;
+    this.todo = this.db.transcripts.find().map((t) => ({ id: t.id, episodeId: t.episodeId }));
+    this.timer = setImmediate(() => this.slice());
+  }
+
+  /** Stop background work (shutdown). */
+  stop(): void {
+    this.stopped = true;
+    if (this.timer) clearImmediate(this.timer);
+    this.timer = null;
+  }
+
+  private slice(): void {
+    this.timer = null;
+    if (this.stopped) return;
+    this.build(SLICE_MS);
+    if (this.todo) this.timer = setImmediate(() => this.slice());
+  }
+
+  /** Index transcripts for up to `budgetMs`; clears `todo` when done. */
+  private build(budgetMs: number): void {
+    const end = Date.now() + budgetMs;
+    while (this.todo && this.todo.length) {
+      const next = this.todo.pop()!;
+      if (!this.touched.has(next.episodeId)) {
+        const tr = this.db.transcripts.get(next.id);
+        if (tr) this.index.add(tr.episodeId, tr.segments);
+      }
+      if (Date.now() >= end) return;
+    }
+    this.todo = null;
+    this.built = true;
+    this.touched.clear();
+  }
 
   /** `podcastIds` is the set the caller may search (their subscriptions). */
   transcripts(q: string, podcastIds: Set<string>, opts: { podcastId?: string; limit: number; offset: number }): TranscriptSearchResponse {
-    const terms = searchTerms(q);
-    if (!terms.length) return { total: 0, items: [] };
-    const scope = opts.podcastId ? (podcastIds.has(opts.podcastId) ? new Set([opts.podcastId]) : new Set<string>()) : podcastIds;
-    const matches = (text: string) => terms.every((t) => text.includes(t));
-    const found: TranscriptSearchItem[] = [];
-    for (const tr of this.db.transcripts.find()) {
-      const ep = this.db.episodes.get(tr.episodeId);
-      if (!ep || ep.deleted || !scope.has(ep.podcastId)) continue;
-      const hits: TranscriptSearchItem['hits'] = [];
-      let count = 0;
-      const segs = tr.segments;
-      for (let i = 0; i < segs.length; i++) {
-        const seg = segs[i]!;
-        const text = fold(seg.text);
-        let hit: string | null = null;
-        if (matches(text)) hit = seg.text;
-        else if (terms.length > 1 || terms[0]!.includes(' ')) {
-          // A phrase can straddle two lines of a transcript.
-          const next = segs[i + 1];
-          if (next && matches(`${text} ${fold(next.text)}`)) {
-            hit = `${seg.text} ${next.text}`;
-            i++;
-          }
-        }
-        if (hit === null) continue;
-        count++;
-        if (hits.length < HITS_PER_EPISODE) hits.push({ startMs: seg.startMs, text: snippet(hit, terms) });
-      }
-      if (!count) continue;
-      const podcast = this.db.podcasts.get(ep.podcastId);
-      found.push({ episodeId: ep.id, podcastId: ep.podcastId, episodeTitle: ep.title, podcastTitle: podcast?.title ?? '', releasedAt: ep.releasedAt, matches: count, hits });
+    if (!this.built) {
+      this.todo ??= this.db.transcripts.find().map((t) => ({ id: t.id, episodeId: t.episodeId }));
+      this.build(Infinity);
     }
-    found.sort((a, b) => b.matches - a.matches || b.releasedAt - a.releasedAt);
-    return { total: found.length, items: found.slice(opts.offset, opts.offset + opts.limit) };
+    const scope = opts.podcastId ? (podcastIds.has(opts.podcastId) ? new Set([opts.podcastId]) : new Set<string>()) : podcastIds;
+    const usable = (episodeId: string) => {
+      const ep = this.db.episodes.get(episodeId);
+      return !!ep && !ep.deleted && scope.has(ep.podcastId);
+    };
+    const out = this.index.search(q, usable);
+    const withDate = out.ranked.map((r) => ({ r, at: this.db.episodes.get(r.episodeId)?.releasedAt ?? 0 }));
+    withDate.sort((a, b) => b.r.score - a.r.score || b.at - a.at);
+    const items: TranscriptSearchItem[] = [];
+    for (const { r } of withDate.slice(opts.offset, opts.offset + opts.limit)) {
+      const ep = this.db.episodes.get(r.episodeId)!;
+      const podcast = this.db.podcasts.get(ep.podcastId);
+      items.push({ episodeId: ep.id, podcastId: ep.podcastId, episodeTitle: ep.title, podcastTitle: podcast?.title ?? '', releasedAt: ep.releasedAt, matches: r.matches, hits: out.hits(r, HITS_PER_EPISODE) });
+    }
+    return { total: withDate.length, items };
   }
 }

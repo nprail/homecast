@@ -45,7 +45,8 @@ struct TranscriptResponse: Decodable {
 }
 
 /// `GET /search/transcripts`: episodes whose transcripts match, with the matching lines.
-struct TranscriptSearchHit: Decodable, Hashable { var startMs: Int; var text: String }
+/// `marks` are the matched stretches of `text` as [start, end] UTF-16 offsets; older servers send none.
+struct TranscriptSearchHit: Decodable, Hashable { var startMs: Int; var text: String; var marks: [[Int]]? }
 struct TranscriptSearchItem: Decodable, Identifiable, Hashable {
     var episodeId: String
     var podcastId: String

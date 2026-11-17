@@ -309,7 +309,7 @@ struct TranscriptSearchView: View {
                         .padding(.horizontal, 16).frame(minHeight: 40).glassEffect(.regular, in: .capsule)
                 }
                 if q.count < Self.minChars {
-                    EmptyState(icon: "text.magnifyingglass", title: "Find a moment in any episode", message: "Search what was said. Only episodes that have a transcript are searched. Use quotes to match an exact phrase.")
+                    EmptyState(icon: "text.magnifyingglass", title: "Find a moment in any episode", message: "Search what was said. Only episodes that have a transcript are searched. Other forms of a word and small typos match. Use quotes for an exact phrase and a minus sign to leave a word out.")
                 } else if let result {
                     if result.items.isEmpty && !loading {
                         EmptyState(icon: "magnifyingglass", title: "No matches", message: "Try different words, or fewer of them.")
@@ -346,7 +346,7 @@ struct TranscriptSearchView: View {
                 Button { Task { await open(item, at: hit.startMs) } } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(Fmt.clock(hit.startMs)).font(.system(size: 13, weight: .semibold).monospacedDigit()).foregroundStyle(Brand.accent).frame(width: 46, alignment: .leading)
-                        Text(highlighted(hit.text)).font(.system(size: 14)).foregroundStyle(Brand.text).multilineTextAlignment(.leading)
+                        Text(highlighted(hit)).font(.system(size: 14)).foregroundStyle(Brand.text).multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                     }
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
@@ -362,9 +362,19 @@ struct TranscriptSearchView: View {
         .padding(14).frame(maxWidth: .infinity, alignment: .leading).glassEffect(.regular, in: .rect(cornerRadius: 24))
     }
 
-    /// The matched words in amber, using the same word and "quoted phrase" rules as the server.
-    private func highlighted(_ text: String) -> AttributedString {
+    /// The stretches the server says matched, in amber. Older servers send none; then the typed words are marked, "quoted phrases" whole.
+    private func highlighted(_ hit: TranscriptSearchHit) -> AttributedString {
+        let text = hit.text
         var out = AttributedString(text)
+        if let marks = hit.marks {
+            for m in marks where m.count == 2 && m[0] >= 0 && m[0] < m[1] && m[1] <= text.utf16.count {
+                let a = String.Index(utf16Offset: m[0], in: text), b = String.Index(utf16Offset: m[1], in: text)
+                guard let lo = AttributedString.Index(a, within: out), let hi = AttributedString.Index(b, within: out) else { continue }
+                out[lo ..< hi].foregroundColor = Brand.amber
+                out[lo ..< hi].font = .system(size: 14, weight: .semibold)
+            }
+            return out
+        }
         var terms: [String] = []
         var rest = Substring(shownQuery)
         while let first = rest.first {

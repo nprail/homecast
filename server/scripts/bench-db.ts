@@ -234,7 +234,10 @@ async function runDb(engine: EngineName, dir: string): Promise<Record<string, nu
 
   s = await timeIt(10, () => get('/discover?q=show&limit=50'));
   out.discoverMedMs = s.med;
-  s = await timeIt(5, () => get('/search/transcripts?q=tomatoes%20compost&limit=20'));
+  // The first search builds the full-text index (a server does it in the background after start-up).
+  s = await timeIt(1, () => get('/search/transcripts?q=tomatoes%20compost&limit=20'));
+  out.searchFirstMs = s.med;
+  s = await timeIt(20, () => get('/search/transcripts?q=tomatoes%20compost&limit=20'));
   out.searchMedMs = s.med;
   const tr = db.transcripts.find()[0]!;
   s = await timeIt(30, () => get(`/episodes/${tr.episodeId}/transcript`));
@@ -340,6 +343,7 @@ async function compare(): Promise<void> {
     ['Sync: push 25 play positions (median)', 'syncPush25MedMs'],
     ['Sync: new device pulls a heavy library (median)', 'fullSyncMedMs'],
     ['Discover search (median)', 'discoverMedMs'],
+    ['Transcript search, first (builds the index)', 'searchFirstMs'],
     ['Transcript search (median)', 'searchMedMs'],
     ['Fetch one transcript (median)', 'transcriptGetMedMs'],
     ['Admin overview (median)', 'adminOverviewMedMs'],

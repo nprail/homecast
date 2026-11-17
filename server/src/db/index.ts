@@ -9,6 +9,9 @@ import { LokiBackend, listBackupFiles } from './loki.js';
 import type { Backend, EngineName, Repo } from './repo.js';
 import { SqliteBackend } from './sqlite.js';
 import { clean } from '../util/misc.js';
+import { observe, type Change } from './observe.js';
+
+export type { Change } from './observe.js';
 
 export type { EngineName, Query, Repo } from './repo.js';
 export const ENGINES: readonly EngineName[] = ['loki', 'sqlite', 'docstore'];
@@ -51,12 +54,13 @@ export class Database {
   /** Every collection by name (copying between engines). */
   readonly collections = new Map<string, Repo<{ id: string }>>();
   readonly file: string;
+  private readonly transcriptListeners: ((c: Change<Transcript>) => void)[] = [];
 
   private constructor(readonly backend: Backend) {
     this.file = backend.file;
     const rev = () => backend.bumpRev();
-    const col = <T extends { id: string }>(name: string, unique: (keyof T & string)[], indices: (keyof T & string)[], synced = false, compound: string[][] = []): Repo<T> => {
-      const r = backend.repo<T>(name, unique, indices, synced ? rev : null, compound);
+    const col = <T extends { id: string }>(name: string, unique: (keyof T & string)[], indices: (keyof T & string)[], synced = false, compound: string[][] = [], wrap?: (r: Repo<T>) => Repo<T>): Repo<T> => {
+      const r = wrap ? wrap(backend.repo<T>(name, unique, indices, synced ? rev : null, compound)) : backend.repo<T>(name, unique, indices, synced ? rev : null, compound);
       this.collections.set(name, r as unknown as Repo<{ id: string }>);
       return r;
     };
@@ -67,7 +71,7 @@ export class Database {
     this.resetTokens = col<ResetToken>('resetTokens', ['tokenHash'], []);
     this.podcasts = col<Podcast>('podcasts', ['feedUrl'], ['rev'], true);
     this.episodes = col<Episode>('episodes', [], ['podcastId', 'rev', 'audioUrl', 'createdAt'], true, [['podcastId', 'rev']]);
-    this.transcripts = col<Transcript>('transcripts', ['episodeId'], []);
+    this.transcripts = col<Transcript>('transcripts', ['episodeId'], [], false, [], (r) => observe(r, (c) => this.transcriptListeners.forEach((fn) => fn(c))));
     this.subscriptions = col<Subscription>('subscriptions', [], ['userId', 'podcastId', 'rev'], true, [['userId', 'rev']]);
     this.episodeStates = col<EpisodeState>('episodeStates', [], ['userId', 'episodeId', 'rev'], true, [['userId', 'rev']]);
     this.bookmarks = col<Bookmark>('bookmarks', [], ['userId', 'episodeId', 'rev'], true, [['userId', 'rev']]);
@@ -98,6 +102,11 @@ export class Database {
       }
     }
     return db;
+  }
+
+  /** Be told when a transcript is added, changed or removed. */
+  onTranscriptChange(fn: (c: Change<Transcript>) => void): void {
+    this.transcriptListeners.push(fn);
   }
 
   get engine(): EngineName {

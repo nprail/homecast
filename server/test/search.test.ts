@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { App } from '../src/app.js';
-import { searchTerms } from '../src/services/search.js';
 import { bearer, createUser, fakeOrigin, registerAdmin, rssFeed, startApp, type Session } from './helpers.js';
 
 let a: App;
@@ -35,11 +34,6 @@ afterEach(async () => {
 });
 
 describe('transcript search', () => {
-  it('parses words and quoted phrases', () => {
-    expect(searchTerms('Tomatoes  "slow fermentation" sun')).toEqual(['tomatoes', 'slow fermentation', 'sun']);
-    expect(searchTerms('   ')).toEqual([]);
-  });
-
   it('finds matching lines with timestamps, ranked by number of matches', async () => {
     const r = await search(admin, 'q=tomatoes');
     expect(r.statusCode).toBe(200);
@@ -48,8 +42,8 @@ describe('transcript search', () => {
     expect(j.items.map((i: { episodeTitle: string }) => i.episodeTitle)).toEqual(['Tomatoes', 'Compost']); // 2 matches, then 1
     expect(j.items[0]).toMatchObject({ matches: 2, podcastTitle: 'Gardening Hour' });
     expect(j.items[0].hits).toEqual([
-      { startMs: 0, text: 'Today we plant tomatoes in the spring.' },
-      { startMs: 4000, text: 'Tomatoes need lots of sun and water.' },
+      { startMs: 0, text: 'Today we plant tomatoes in the spring.', marks: [[15, 23]] },
+      { startMs: 4000, text: 'Tomatoes need lots of sun and water.', marks: [[0, 8]] },
     ]);
   });
 
@@ -59,8 +53,11 @@ describe('transcript search', () => {
     expect((await search(admin, 'q=yeast')).json().total).toBe(0);
   });
 
-  it('requires every word, supports phrases, and matches across two adjacent lines', async () => {
-    expect((await search(admin, 'q=plant+basil')).json().total).toBe(0);
+  it('requires every word somewhere in the episode, supports phrases, and matches across two adjacent lines', async () => {
+    expect((await search(admin, 'q=plant+yeast')).json().total).toBe(0);
+    const spread = (await search(admin, 'q=plant+basil')).json(); // different lines of one episode still match
+    expect(spread.total).toBe(1);
+    expect(spread.items[0].hits.map((h: { startMs: number }) => h.startMs)).toEqual([0, 9000]);
     expect((await search(admin, 'q=lots+sun')).json().total).toBe(1);
     expect((await search(admin, `q=${encodeURIComponent('"sun and water"')}`)).json().total).toBe(1);
     expect((await search(admin, `q=${encodeURIComponent('"water and sun"')}`)).json().total).toBe(0);
@@ -81,6 +78,36 @@ describe('transcript search', () => {
     expect((await search(admin, 'q=tomatoes')).json().total).toBe(1);
     expect((await search(admin, 'q=a')).statusCode).toBe(400);
     expect((await a.app.inject({ method: 'GET', url: '/api/v1/search/transcripts?q=tomatoes' })).statusCode).toBe(401);
+  });
+});
+
+describe('transcript search, full text', () => {
+  it('matches other forms of a word, the start of the last word, and small typos', async () => {
+    expect((await search(admin, 'q=plants')).json().items[0].hits[0].marks).toEqual([[9, 14]]); // plant ~ plants
+    expect((await search(admin, 'q=ferment')).json().total).toBe(0); // admin does not follow the kitchen podcast
+    expect((await search(maya, 'q=ferment')).json().total).toBe(1); // fermentation
+    expect((await search(admin, 'q=tomat')).json().total).toBe(2); // prefix of the last word
+    expect((await search(admin, 'q=tomatos')).json().total).toBe(2); // one letter off
+    expect((await search(admin, 'q=tomaato')).json().total).toBe(2);
+    expect((await search(admin, 'q=qqqqqqqq')).json().total).toBe(0);
+  });
+
+  it('excludes words, ranks episodes that have the words together first, and marks the match', async () => {
+    expect((await search(admin, 'q=tomatoes+-compost')).json().items.map((i: { episodeTitle: string }) => i.episodeTitle)).toEqual(['Tomatoes']);
+    expect((await search(admin, 'q=tomatoes+-basil')).json().items.map((i: { episodeTitle: string }) => i.episodeTitle)).toEqual(['Compost']);
+    const j = (await search(admin, 'q=sun+water')).json();
+    expect(j.items[0].hits[0]).toEqual({ startMs: 4000, text: 'Tomatoes need lots of sun and water.', marks: [[22, 25], [30, 35]] });
+    const phrase = (await search(admin, `q=${encodeURIComponent('"sun and water"')}`)).json();
+    expect(phrase.items[0].hits[0].marks).toEqual([[22, 35]]); // one stretch for the whole phrase
+  });
+
+  it('keeps up as transcripts are added and removed', async () => {
+    expect((await search(admin, 'q=sourdough')).json().total).toBe(0);
+    expect((await search(admin, 'q=compost')).json().total).toBe(1);
+    a.ctx.db.transcripts.remove(a.ctx.db.transcripts.findOne({ episodeId: ids.g2! })!);
+    expect((await search(admin, 'q=compost')).json().total).toBe(0);
+    a.ctx.db.transcripts.insert({ episodeId: ids.g2!, source: 'whisper', status: 'ready', model: 'base', segments: [seg(0, 'A sourdough starter needs feeding.')], createdAt: 2 });
+    expect((await search(admin, 'q=sourdough')).json().total).toBe(1);
   });
 });
 
