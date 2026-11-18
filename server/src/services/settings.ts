@@ -15,6 +15,7 @@ export class SettingsService {
         pollIntervalMinutes: 30,
         autoTranscribe: { enabled: false, scope: 'new', recentCount: 10, podcastIds: null, enabledAt: 0 },
         episodeMirror: { enabled: false, maxGB: null },
+        publicDirectory: { enabled: false, listening: false, transcripts: false, subscriberCounts: false },
         lastBackupAt: null,
         lastBackupBytes: null,
       });
@@ -26,6 +27,7 @@ export class SettingsService {
     d.autoTranscribe ??= { enabled: false, scope: 'new', recentCount: 10, podcastIds: null, enabledAt: 0 };
     d.autoTranscribe.recentCount ??= 10;
     d.episodeMirror ??= { enabled: false, maxGB: null };
+    d.publicDirectory ??= { enabled: false, listening: false, transcripts: false, subscriberCounts: false };
     return d;
   }
   get(): ServerSettings {
@@ -35,12 +37,19 @@ export class SettingsService {
     patch: Partial<Pick<ServerSettings, 'registrationOpen' | 'whisperModel' | 'pollIntervalMinutes'>> & {
       autoTranscribe?: { enabled: boolean; scope: 'new' | 'recent' | 'all'; recentCount?: number; podcastIds: string[] | null };
       episodeMirror?: { enabled: boolean; maxGB: number | null };
+      publicDirectory?: Partial<ServerSettings['publicDirectory']>;
     },
   ): ServerSettings {
     const d = this.doc;
-    const { autoTranscribe, episodeMirror, ...rest } = patch;
+    const { autoTranscribe, episodeMirror, publicDirectory, ...rest } = patch;
     Object.assign(d, rest);
     if (episodeMirror) d.episodeMirror = { enabled: episodeMirror.enabled, maxGB: episodeMirror.maxGB };
+    if (publicDirectory) {
+      for (const k of ['enabled', 'listening', 'transcripts', 'subscriberCounts'] as const) {
+        const v = publicDirectory[k];
+        if (typeof v === 'boolean') d.publicDirectory[k] = v;
+      }
+    }
     if (autoTranscribe) {
       const prev = d.autoTranscribe;
       // "New episodes" counts from the moment it is switched on (or the scope is narrowed to new).

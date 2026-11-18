@@ -4,6 +4,7 @@ import { addPodcastBody, discoverQuery, subscribeBody, type DiscoverItem } from 
 import type { Ctx } from '../context.js';
 import type { Podcast, Subscription } from '../db/types.js';
 import { makeAuth, userOf } from '../plugins/auth.js';
+import { directoryItems } from '../services/directory.js';
 import { normalizeFeedUrl } from '../services/feedParser.js';
 import { toText } from '../util/html.js';
 import { clean, now } from '../util/misc.js';
@@ -65,17 +66,7 @@ export function libraryRoutes(ctx: Ctx) {
       const q = query(req, discoverQuery);
       const user = userOf(req);
       const mine = new Set(ctx.db.subscriptions.find({ userId: user.id }).filter((s) => !s.deleted).map((s) => s.podcastId));
-      const counts = new Map<string, number>();
-      for (const s of ctx.db.subscriptions.where((x) => !x.deleted)) counts.set(s.podcastId, (counts.get(s.podcastId) ?? 0) + 1);
-      const needle = q.q?.trim().toLowerCase();
-      let items: DiscoverItem[] = [];
-      for (const [podcastId, n] of counts) {
-        const p = ctx.db.podcasts.get(podcastId);
-        // Private and hidden feeds are never listed; podcasts with no subscribers drop out naturally.
-        if (!p || p.deleted || p.isPrivate || p.hiddenFromDiscover || mine.has(podcastId)) continue;
-        if (needle && !p.title.toLowerCase().includes(needle) && !p.author.toLowerCase().includes(needle)) continue;
-        items.push({ id: p.id, title: p.title, author: p.author, imageUrl: p.imageUrl, description: p.description.slice(0, 300), subscriberCount: n, addedAt: p.createdAt });
-      }
+      let items = directoryItems(ctx.db, { q: q.q, exclude: mine });
       const sorters = {
         subscribers: (a: DiscoverItem, b: DiscoverItem) => b.subscriberCount - a.subscriberCount || a.title.localeCompare(b.title),
         recent: (a: DiscoverItem, b: DiscoverItem) => b.addedAt - a.addedAt,

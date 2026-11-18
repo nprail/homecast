@@ -214,6 +214,8 @@ export interface ServerSettings {
   pollIntervalMinutes: number;
   autoTranscribe: { enabled: boolean; scope: 'new' | 'recent' | 'all'; recentCount: number; podcastIds: string[] | null; enabledAt: number };
   episodeMirror: { enabled: boolean; maxGB: number | null };
+  /** The public, view-only directory and share pages (off by default). */
+  publicDirectory: { enabled: boolean; listening: boolean; transcripts: boolean; subscriberCounts: boolean };
   lastBackupAt: number | null;
   lastBackupBytes: number | null;
 }

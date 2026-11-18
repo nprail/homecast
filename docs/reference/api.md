@@ -34,6 +34,18 @@ All routes live under `/api/v1` and speak JSON. Authenticated routes need `Autho
 | `GET /opml/export` | your subscriptions as OPML |
 | `GET /me/export` | all of your own data as JSON |
 
+### Public directory (no login)
+
+Served only while Settings → Public directory is on; otherwise every route except `config` answers 404. Read-only. See [Public directory](/guides/admin#public-directory).
+
+| Route | Description |
+|---|---|
+| `GET /public/config` | `{ enabled, listening, transcripts, subscriberCounts }` |
+| `GET /public/discover?q=&sort=&limit=&offset=` | the Discover list. `sort` is `recent` or `az`, or `subscribers` when counts are shown. `subscriberCount` is 0 unless counts are shown |
+| `GET /public/podcasts/:id?limit=&offset=` | the podcast and a page of episodes, newest first. Private feeds are 404 |
+| `GET /public/episodes/:id` | the episode with show notes and chapters. `audioUrl` is the publisher's address when public listening is on, else `null`. `hasTranscript` is true only when public transcripts are on |
+| `GET /public/episodes/:id/transcript` | `{ status, source, segments }`; 404 unless public transcripts are on |
+
 ## Sync, transcripts and audio
 
 | Route | Description |

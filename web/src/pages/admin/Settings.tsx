@@ -177,6 +177,32 @@ function EpisodeHosting({
   );
 }
 
+function PublicDirectory({ value, onChange }: { value: AdminSettings['publicDirectory']; onChange: (v: AdminSettings['publicDirectory']) => void }) {
+  const row = (key: keyof AdminSettings['publicDirectory'], title: string, hint: string) => (
+    <div className="flex items-center justify-between gap-6">
+      <div>
+        <div className="font-medium">{title}</div>
+        <div className="text-[13px] text-muted">{hint}</div>
+      </div>
+      <Switch label={title} checked={value[key]} onChange={(v) => onChange({ ...value, [key]: v })} />
+    </div>
+  );
+  return (
+    <Card title="Public directory">
+      <div className="flex flex-col gap-4 px-5 py-4">
+        {row('enabled', 'Show a public directory', 'Anyone can browse the podcasts people here follow, and open shared episode links, without signing in. The pages are view-only: following, saving and every other action asks for a sign-in. Private feeds are never shown.')}
+        {value.enabled && (
+          <>
+            {row('listening', 'Allow public listening', "Visitors can play episodes. Audio streams straight from the podcast's own server, never from a copy hosted here.")}
+            {row('transcripts', 'Allow public viewing of transcripts', 'Visitors can read the transcript of an episode that has one.')}
+            {row('subscriberCounts', 'Show subscriber counts', 'Show how many people here follow each podcast, and allow sorting by it.')}
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['admin', 'settings'], queryFn: () => get<AdminSettings>('/admin/settings') });
@@ -248,6 +274,7 @@ export function SettingsPage() {
             onChange={(episodeMirror) => setForm({ ...form, episodeMirror })}
             onDeleted={() => void qc.invalidateQueries({ queryKey: ['admin', 'settings'] })}
           />
+          <PublicDirectory value={form.publicDirectory} onChange={(publicDirectory) => setForm({ ...form, publicDirectory })} />
           <div className="flex items-center gap-3">
             <Button variant="primary" disabled={!dirty || save.isPending} onClick={() => form && save.mutate(form)}>
               {save.isPending ? 'Saving…' : 'Save changes'}

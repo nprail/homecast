@@ -28,6 +28,19 @@ Admins reach the dashboard at `/admin` (or **Admin** in the player's sidebar and
 
 Feeds with no subscribers are not polled. **Remove orphans** deletes them and their episodes. Private and tokenized feed URLs are redacted in this list, and private feeds are never listed in Discover.
 
+## Public directory
+
+Off by default. Turn it on under **Settings → Public directory** to let anyone, signed in or not, browse the podcasts people on this server follow and open shared episode links. The pages are view-only: following, queueing, downloading, bookmarking and every other action asks the visitor to sign in, and brings them back to the same page afterwards.
+
+| Setting | Default | What it does |
+|---|---|---|
+| Show a public directory | off | Serves the public Discover page, podcast pages and episode pages (title, art, show notes with links and timestamps, chapters). While it is off, every public address answers 404 and shared links ask for a sign-in as before. |
+| Allow public listening | off | Adds a player to the public episode page. Audio streams straight from the podcast's own server. Copies hosted by [Episode hosting](#episode-hosting) are never served publicly. |
+| Allow public viewing of transcripts | off | Visitors can read the transcript of an episode that has one. Nothing is transcribed for visitors, and they cannot request one. |
+| Show subscriber counts | off | Shows how many people follow each podcast and allows sorting by it. Never shows who. |
+
+The directory lists the same podcasts as signed-in Discover (followed by at least one person, not private, not hidden). **Private feeds are never served.** A podcast you hide from Discover is left out of the list, but a link to one of its episodes still opens, the same as it does for signed-in users. The public pages are part of the web player; the iOS and Android apps need an account on the server and have no signed-out view.
+
 ## Episode hosting
 
 Off by default. When you turn on **Keep copies of episodes on this server** (**Settings → Episode hosting**), the server downloads every episode of the podcasts people subscribe to and keeps the audio on its own disk:

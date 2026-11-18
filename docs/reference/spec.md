@@ -127,6 +127,7 @@ Rules stored as JSON and evaluated on-device:
 - **Private feeds are never listed.** Feeds that use credentials or tokenized URLs (HTTP auth, or flagged private by the user or detected heuristically) are excluded, and subscribing from Discover references the podcast by ID, so another user's feed URL is never exposed.
 - Podcasts drop out of Discover when nobody is subscribed. Admins can hide a podcast from Discover.
 - Requires a connection; the last list is cached for offline browsing.
+- **Public directory (optional, off by default).** An admin can serve the same list, podcast pages and shared episode pages to signed-out visitors, view-only, with separate switches for public listening (streamed from the publisher, never a hosted copy), public transcripts and subscriber counts. Web only. Private feeds are never served.
 
 ### 3.11 Admin Dashboard
 Part of the same React app under `/admin`. Every `/admin` API route enforces the `admin` role server-side; hiding UI is not the security boundary.

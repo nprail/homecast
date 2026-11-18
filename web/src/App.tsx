@@ -5,6 +5,7 @@ import { Loading } from './components/ui';
 import { useAuth } from './lib/auth';
 import { LoginPage, RegisterPage, ResetPasswordPage } from './pages/Auth';
 import { AppDataProvider } from './player/AppData';
+import { PublicFallback } from './player/public/Public';
 import { PlayerShell } from './player/components/Shell';
 import { BookmarksPage } from './player/pages/Bookmarks';
 import { SearchPage } from './player/pages/Search';
@@ -49,9 +50,8 @@ function RequireAdmin() {
 /** The player: only for signed-in users; opens the local-first database for that user. */
 function RequireUser() {
   const { user, loading } = useAuth();
-  const loc = useLocation();
   if (loading) return <div className="flex h-dvh items-center justify-center bg-p-bg text-p-muted">Loading…</div>;
-  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname)}`} replace />;
+  if (!user) return <PublicFallback />;
   return (
     <AppDataProvider>
       <AppReady />

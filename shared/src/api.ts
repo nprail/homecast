@@ -63,7 +63,65 @@ export const patchSettingsBody = z.object({
       maxGB: z.number().positive().max(100_000).nullable(),
     })
     .optional(),
+  publicDirectory: z
+    .object({
+      enabled: z.boolean(),
+      listening: z.boolean(),
+      transcripts: z.boolean(),
+      subscriberCounts: z.boolean(),
+    })
+    .partial()
+    .optional(),
 });
+
+/** Public (signed-out) directory: what the server allows, and the pages it serves. */
+export interface PublicConfig {
+  enabled: boolean;
+  /** Visitors can play episodes, streaming straight from the publisher (never from a hosted copy). */
+  listening: boolean;
+  transcripts: boolean;
+  subscriberCounts: boolean;
+}
+export const publicDiscoverQuery = z.object({
+  q: z.string().trim().max(100).optional(),
+  sort: z.enum(['recent', 'az', 'subscribers']).default('recent'),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export const publicEpisodesQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export interface PublicEpisodeItem {
+  id: string;
+  title: string;
+  releasedAt: number;
+  durationSec: number;
+}
+export interface PublicPodcast {
+  id: string;
+  title: string;
+  author: string;
+  imageUrl: string | null;
+  description: string;
+  /** Only when the server shows subscriber counts publicly. */
+  subscriberCount?: number;
+  total: number;
+  episodes: PublicEpisodeItem[];
+}
+export interface PublicEpisode {
+  id: string;
+  title: string;
+  description: string;
+  releasedAt: number;
+  durationSec: number;
+  podcast: { id: string; title: string; author: string; imageUrl: string | null };
+  /** The publisher's audio address; only when public listening is on. */
+  audioUrl: string | null;
+  /** Only when public transcripts are on. */
+  hasTranscript: boolean;
+  chapters: Chapter[];
+}
 
 export interface UserDto {
   id: string;

@@ -308,11 +308,12 @@ export function adminRoutes(ctx: Ctx) {
 
     // ---- settings -----------------------------------------------------------------------------
     const settingsDto = () => {
-      const { registrationOpen, whisperModel, pollIntervalMinutes, autoTranscribe, episodeMirror } = ctx.settings.get();
+      const { registrationOpen, whisperModel, pollIntervalMinutes, autoTranscribe, episodeMirror, publicDirectory } = ctx.settings.get();
       return {
         registrationOpen, whisperModel, pollIntervalMinutes,
         episodeMirror: { enabled: episodeMirror.enabled, maxGB: episodeMirror.maxGB },
         episodeMirrorStatus: ctx.mirror.status(),
+        publicDirectory: { ...publicDirectory },
         autoTranscribe: { enabled: autoTranscribe.enabled, scope: autoTranscribe.scope, recentCount: autoTranscribe.recentCount, podcastIds: autoTranscribe.podcastIds },
         autoTranscribePending: ctx.autoTranscribe.eligible().length,
       };

@@ -29,6 +29,7 @@ import { authRoutes } from './routes/auth.js';
 import { healthRoutes } from './routes/health.js';
 import { libraryRoutes } from './routes/library.js';
 import { mediaRoutes } from './routes/media.js';
+import { publicRoutes } from './routes/public.js';
 import { proxyRoutes } from './routes/proxy.js';
 import { syncRoutes } from './routes/sync.js';
 import { transcriptRoutes } from './routes/transcripts.js';
@@ -139,6 +140,7 @@ export async function buildApp(config: Config, opts: { db?: Database; logger?: b
       await api.register(transcriptRoutes(ctx));
       await api.register(proxyRoutes(ctx));
       await api.register(mediaRoutes(ctx));
+      await api.register(publicRoutes(ctx));
       await api.register(adminRoutes(ctx));
     },
     { prefix: '/api/v1' },

@@ -157,4 +157,5 @@ export interface AdminSettings {
   autoTranscribePending: number;
   episodeMirror: EpisodeMirrorSettings;
   episodeMirrorStatus: EpisodeMirrorStatus;
+  publicDirectory: { enabled: boolean; listening: boolean; transcripts: boolean; subscriberCounts: boolean };
 }
