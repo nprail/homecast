@@ -1,0 +1,17 @@
+{
+  "description": "Shared show-notes vectors: HTML in, segments out (text, link, time). Native (Swift/Kotlin) parsers must return the same segments.",
+  "cases": [
+    { "name": "bare timestamp", "html": "<p>12:30 Intro</p>", "durationMs": 0, "expected": [{ "type": "time", "text": "12:30", "ms": 750000 }, { "type": "text", "text": " Intro" }] },
+    { "name": "hours", "html": "At 1:02:03 we talk", "durationMs": 0, "expected": [{ "type": "text", "text": "At " }, { "type": "time", "text": "1:02:03", "ms": 3723000 }, { "type": "text", "text": " we talk" }] },
+    { "name": "bracketed", "html": "(0:45) and [3:05]", "durationMs": 0, "expected": [{ "type": "text", "text": "(" }, { "type": "time", "text": "0:45", "ms": 45000 }, { "type": "text", "text": ") and [" }, { "type": "time", "text": "3:05", "ms": 185000 }, { "type": "text", "text": "]" }] },
+    { "name": "time of day is not a timestamp", "html": "Live at 8:30 PM and 9:15pm", "durationMs": 0, "expected": [{ "type": "text", "text": "Live at 8:30 PM and 9:15pm" }] },
+    { "name": "past the end stays text", "html": "10:00 and 2:00", "durationMs": 300000, "expected": [{ "type": "text", "text": "10:00 and " }, { "type": "time", "text": "2:00", "ms": 120000 }] },
+    { "name": "not inside words or numbers", "html": "v1:30 and 1:2:3 and 12:345", "durationMs": 0, "expected": [{ "type": "text", "text": "v1:30 and 1:2:3 and 12:345" }] },
+    { "name": "anchor", "html": "Read <a href=\"https://example.com/a?b=1&amp;c=2\">the post</a>.", "durationMs": 0, "expected": [{ "type": "text", "text": "Read " }, { "type": "link", "text": "the post", "url": "https://example.com/a?b=1&c=2" }, { "type": "text", "text": "." }] },
+    { "name": "anchor with a bad scheme is text", "html": "<a href=\"javascript:alert(1)\">click</a> 5:00", "durationMs": 0, "expected": [{ "type": "text", "text": "click " }, { "type": "time", "text": "5:00", "ms": 300000 }] },
+    { "name": "bare url trims punctuation", "html": "See https://example.com/x/y, or (https://example.com/z).", "durationMs": 0, "expected": [{ "type": "text", "text": "See " }, { "type": "link", "text": "https://example.com/x/y", "url": "https://example.com/x/y" }, { "type": "text", "text": ", or (" }, { "type": "link", "text": "https://example.com/z", "url": "https://example.com/z" }, { "type": "text", "text": ")." }] },
+    { "name": "url with a time in it is one link", "html": "https://example.com/watch?t=1:30", "durationMs": 0, "expected": [{ "type": "link", "text": "https://example.com/watch?t=1:30", "url": "https://example.com/watch?t=1:30" }] },
+    { "name": "www gets a scheme", "html": "Go to www.example.com now", "durationMs": 0, "expected": [{ "type": "text", "text": "Go to " }, { "type": "link", "text": "www.example.com", "url": "https://www.example.com" }, { "type": "text", "text": " now" }] },
+    { "name": "line breaks", "html": "<p>One</p><p>00:10 Two<br>Three</p>", "durationMs": 0, "expected": [{ "type": "text", "text": "One\n" }, { "type": "time", "text": "00:10", "ms": 10000 }, { "type": "text", "text": " Two\nThree" }] }
+  ]
+}

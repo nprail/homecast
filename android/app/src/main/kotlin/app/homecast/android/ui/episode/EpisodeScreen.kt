@@ -14,6 +14,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
+import app.homecast.core.NoteSegment
+import app.homecast.core.ShowNotes
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,11 +68,13 @@ fun EpisodeScreen(episodeId: String, nav: AppNav) {
             Box(Modifier.padding(inner).fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
             return@Scaffold
         }
+        val scroll = rememberScrollState()
+        val scope = rememberCoroutineScope()
         val isCurrent = player.episode?.id == it.id
         val isPlaying = isCurrent && player.isPlaying
         val dl = active[it.id]
         Box(Modifier.padding(inner).fillMaxSize(), Alignment.TopCenter) {
-            Column(Modifier.widthIn(max = 720.dp).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.widthIn(max = 720.dp).fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Bottom) {
                     Artwork(it.podcast?.imageUrl, Modifier.size(120.dp), cornerRadius = 20.dp, contentDescription = it.podcast?.title)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -157,9 +168,27 @@ fun EpisodeScreen(episodeId: String, nav: AppNav) {
                     }
                 }
 
-                val notes = remember(it.episode.summary) { Fmt.plainText(it.episode.summary) }
-                if (notes.isNotBlank()) {
+                val segments = remember(it.episode.summary, it.episode.durationSec) { ShowNotes.parse(it.episode.summary, (it.episode.durationSec * 1000).toLong()) }
+                if (segments.isNotEmpty()) {
                     SectionLabel("Show notes")
+                    val accent = MaterialTheme.colorScheme.primary
+                    val epId = it.id
+                    val toTop = { scope.launch { scroll.animateScrollTo(0) }; Unit }
+                    val notes = remember(segments, accent) {
+                        buildAnnotatedString {
+                            val link = TextLinkStyles(SpanStyle(color = accent, textDecoration = TextDecoration.Underline))
+                            val time = TextLinkStyles(SpanStyle(color = accent, fontWeight = FontWeight.SemiBold))
+                            for (s in segments) when (s) {
+                                is NoteSegment.Text -> append(s.text)
+                                is NoteSegment.Link -> withLink(LinkAnnotation.Url(s.url, link)) { append(s.text) }
+                                is NoteSegment.Time -> withLink(LinkAnnotation.Clickable("t${s.ms}", time) {
+                                    toTop()
+                                    if (isCurrent) { graph.player.seekTo(s.ms); if (!isPlaying) graph.player.resume() }
+                                    else { graph.player.play(epId); graph.player.seekTo(s.ms) }
+                                }) { append(s.text) }
+                            }
+                        }
+                    }
                     Text(notes, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

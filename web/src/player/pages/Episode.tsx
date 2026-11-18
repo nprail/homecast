@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { PodcastRec } from '../lib/db';
 import { ApiError, get, post } from '../../lib/api';
@@ -12,7 +12,7 @@ import { clock, lengthText } from '../lib/format';
 import { useGoBack, useStates } from '../lib/hooks';
 import { useChapters } from '../lib/chapters';
 import { parseMomentTime, shareMoment } from '../lib/share';
-import { safeHtml } from '../lib/sanitize';
+import { showNotesHtml } from '../lib/sanitize';
 import { toast, ui } from '../lib/ui';
 
 /** A link someone sent to an episode this person doesn't have yet: show what it is and offer to follow the podcast. */
@@ -72,6 +72,7 @@ export function EpisodePage() {
   const t = parseMomentTime(params.get('t'));
   const { db, data, player } = useApp();
   const goBack = useGoBack('/');
+  const topRef = useRef<HTMLDivElement>(null);
   // `null` while loading, `undefined` once we know this device doesn't have the episode.
   const ep = useLiveQuery(() => db.episodes.get(id), [db, id], null);
   const podcast = useLiveQuery(async () => (ep ? db.podcasts.get(ep.podcastId) : undefined), [db, ep?.podcastId]);
@@ -83,7 +84,7 @@ export function EpisodePage() {
   const date = new Date(ep.releasedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   return (
     <Page>
-      <div className="flex items-start gap-4">
+      <div ref={topRef} className="flex scroll-mt-4 items-start gap-4">
         <Art podcast={podcast} size={96} radius={14} />
         <div className="min-w-0 flex-1">
           <Link to={`/podcast/${ep.podcastId}`} className="text-[13px] font-medium text-p-accent no-underline">{podcast?.title}</Link>
@@ -109,7 +110,19 @@ export function EpisodePage() {
         <button className={outlineBtn} aria-label="More actions" onClick={() => ui.set({ menuEpisodeId: id })}>More</button>
       </div>
       {ep.description ? (
-        <div className="prose-p mt-6 text-[15px] leading-6 text-p-text/90 [&_a]:text-p-accent [&_p]:my-3 [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-5" dangerouslySetInnerHTML={{ __html: safeHtml(ep.description) }} />
+        <div
+          className="prose-p mt-6 text-[15px] leading-6 text-p-text/90 [&_a]:text-p-accent [&_p]:my-3 [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-5 [&_a[data-t]]:font-semibold [&_a[data-t]]:no-underline [&_a[data-t]]:tnum"
+          onClick={(e) => {
+            const a = (e.target as HTMLElement).closest('a[data-t]');
+            if (!a) return;
+            e.preventDefault();
+            topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            const ms = Number(a.getAttribute('data-t'));
+            if (player.state.get().episodeId === id) player.seekTo(ms);
+            else void player.play(id, { label: podcast?.title ?? 'Episode' }).then(() => player.seekTo(ms));
+          }}
+          dangerouslySetInnerHTML={{ __html: showNotesHtml(ep.description, (ep.durationSec ?? 0) * 1000) }}
+        />
       ) : (
         <p className="mt-6 text-sm text-p-muted">This episode has no show notes.</p>
       )}

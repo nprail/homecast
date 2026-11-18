@@ -24,6 +24,7 @@ struct EpisodeDetailView: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             if let item = snap.value.item {
                 VStack(alignment: .leading, spacing: 20) {
@@ -86,12 +87,20 @@ struct EpisodeDetailView: View {
                     if !item.episode.summary.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             SectionLabel("Show notes")
-                            Text(Fmt.plainText(item.episode.summary)).font(.system(size: 16)).foregroundStyle(Brand.text.opacity(0.9)).lineSpacing(3)
+                            Text(ShowNotes.attributed(ShowNotes.parse(item.episode.summary, durationMs: Int(item.episode.durationSec * 1000))))
+                                .font(.system(size: 16)).foregroundStyle(Brand.text.opacity(0.9)).lineSpacing(3).tint(Brand.accent)
+                                .environment(\.openURL, OpenURLAction { url in
+                                    guard let ms = ShowNotes.seekTarget(url) else { return .systemAction }
+                                    withAnimation { proxy.scrollTo("top", anchor: .top) }
+                                    Task { await playAt(item, ms) }
+                                    return .handled
+                                })
                         }
                     }
                 }
                 .padding(20)
             }
+        }
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

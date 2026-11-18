@@ -28,6 +28,10 @@ The web player is an installable PWA. It stores everything it shows in a local d
 
 Nothing extra is synced for this. Every device already syncs each episode's position, and the server keeps the time of the last play. When a device syncs, it looks for the in-progress episode (of a podcast you follow) with the newest play time. If that is not the episode loaded in the player, the player loads it paused, in the Up Next context. If it is the same episode and another device has moved on, the player jumps to the new position. Pausing, backgrounding the app or reloading the page does not count as a play, so a device you only looked at never takes over. Casting devices and a player that is playing or loading are left alone.
 
+## Show notes
+
+Links in show notes open in your browser, and a timestamp (`12:30`, `1:02:03`) jumps to that time: it starts the episode if it is not playing, then seeks. Web addresses written as plain text (`https://…` or `www.…`) become links too. A time written like a clock time (`8:30 PM`) and a timestamp past the end of the episode are left as text. Only `http`, `https` and `mailto` links are kept. The same rules run on web, iOS and Android (`shared/vectors/show-notes.json`).
+
 ## Casting
 
 Play on a speaker, TV or Chromecast from the full-screen player (the **Cast** button, or the AirPlay button on iPhone and iPad). The phone or browser stays the remote: play, pause, seek, skip and speed all work, and your position keeps syncing to the server while the device plays.
@@ -57,7 +61,7 @@ Chapters come from, in order: the publisher's Podcasting 2.0 chapters file (`<po
 
 Share an episode, or a specific moment in it, with other people on your server. In the web player use **More → Share this moment** (it uses the current position), the **Share** button on an episode page, or **Share this line** on a transcript line, which also quotes the line. The native apps have the same options from the player menu, the episode menu and transcript lines.
 
-The link looks like `https://your-server/episode/ID?t=754` and opens the web player at that time. Someone who is signed in but doesn't follow the podcast yet sees what was shared and can follow it and start playing in one tap (private podcasts are only visible to people who already follow them). Someone who isn't signed in is asked to sign in first and then lands on the same moment. The links open in the browser, not in the native apps.
+The link looks like `https://your-server/episode/ID?t=754` and opens the web player at that time. Someone who is signed in but doesn't follow the podcast yet sees what was shared and can follow it and start playing in one tap (private podcasts are only visible to people who already follow them). Someone who isn't signed in is asked to sign in first and then lands on the same moment. The links open in the browser, not in the native apps. If an admin has turned on the [public directory](/guides/admin#public-directory), the link also works for people who are not signed in: they see the episode, and can listen or read the transcript if the server allows it, and are asked to sign in for anything else.
 
 ## Notifications for new episodes
 

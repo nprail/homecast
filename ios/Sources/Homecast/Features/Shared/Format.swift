@@ -84,3 +84,126 @@ struct ShareMomentLink<Label: View>: View {
         }
     }
 }
+
+/// A piece of show notes: plain text, a link, or a timestamp that jumps in the episode.
+enum NoteSegment: Equatable {
+    case text(String)
+    case link(text: String, url: String)
+    case time(text: String, ms: Int)
+}
+
+/// Finds links and timestamps in show notes. Same rules as `shared/src/showNotes.ts`
+/// (vectors: shared/vectors/show-notes.json).
+enum ShowNotes {
+    /// A web address, or a timestamp ([h:]m:ss) that is not part of a longer word or number and not a time of day.
+    private static let token = try! NSRegularExpression(pattern: #"(?:https?://|www\.)[^\s<>"']+|(?<![A-Za-z0-9_:/.])(?:(\d{1,2}):)?([0-5]?\d):([0-5]\d)(?![A-Za-z0-9_:])(?!\s?[AaPp]\.?[Mm])"#)
+    private static let anchor = try! NSRegularExpression(pattern: #"<a\s[^>]*?href\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)</a>"#, options: .caseInsensitive)
+
+    private static func trimUrl(_ raw: String) -> String {
+        var u = raw
+        func count(_ c: Character) -> Int { u.filter { $0 == c }.count }
+        while let last = u.last {
+            if ".,;:!?'\"".contains(last) { u.removeLast() }
+            else if last == ")" && count("(") < count(")") { u.removeLast() }
+            else if last == "]" && count("[") < count("]") { u.removeLast() }
+            else { break }
+        }
+        return u
+    }
+
+    /// Splits plain text into text, link and timestamp segments. Timestamps past `durationMs` (when known) stay text.
+    static func linkify(_ text: String, durationMs: Int = 0) -> [NoteSegment] {
+        var out: [NoteSegment] = []
+        func push(_ s: NoteSegment) {
+            if case .text(let t) = s {
+                if t.isEmpty { return }
+                if case .text(let p)? = out.last { out[out.count - 1] = .text(p + t); return }
+            }
+            out.append(s)
+        }
+        let ns = text as NSString
+        var last = 0
+        for m in token.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            var raw = ns.substring(with: m.range)
+            let seg: NoteSegment
+            if m.range(at: 2).location == NSNotFound {
+                raw = trimUrl(raw)
+                if raw.utf16.count < 8 { continue }
+                seg = .link(text: raw, url: raw.hasPrefix("www.") ? "https://" + raw : raw)
+            } else {
+                func part(_ i: Int) -> Int { m.range(at: i).location == NSNotFound ? 0 : Int(ns.substring(with: m.range(at: i))) ?? 0 }
+                let ms = ((part(1) * 60 + part(2)) * 60 + part(3)) * 1000
+                if durationMs > 0 && ms > durationMs { continue }
+                seg = .time(text: raw, ms: ms)
+            }
+            push(.text(ns.substring(with: NSRange(location: last, length: m.range.location - last))))
+            push(seg)
+            last = m.range.location + raw.utf16.count
+        }
+        push(.text(ns.substring(from: last)))
+        return out
+    }
+
+    private static func plain(_ html: String) -> String {
+        var s = html.replacingOccurrences(of: "<br\\s*/?>|</p>|</li>", with: "\n", options: [.regularExpression, .caseInsensitive])
+        s = s.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        for (k, v) in [("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"), ("&nbsp;", " "), ("&amp;", "&")] { s = s.replacingOccurrences(of: k, with: v) }
+        return s.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
+    }
+
+    /// Show notes HTML to segments: tags dropped, `<a href>` (http, https, mailto) kept as links, bare URLs and timestamps found.
+    static func parse(_ html: String, durationMs: Int = 0) -> [NoteSegment] {
+        var out: [NoteSegment] = []
+        func add(_ segs: [NoteSegment]) {
+            for s in segs {
+                if case .text(let t) = s, case .text(let p)? = out.last { out[out.count - 1] = .text(p + t) } else { out.append(s) }
+            }
+        }
+        let ns = html as NSString
+        var last = 0
+        for m in anchor.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+            add(linkify(plain(ns.substring(with: NSRange(location: last, length: m.range.location - last))), durationMs: durationMs))
+            func group(_ i: Int) -> String? { m.range(at: i).location == NSNotFound ? nil : ns.substring(with: m.range(at: i)) }
+            let url = plain(group(1) ?? group(2) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let label = plain(group(3) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let scheme = url.lowercased()
+            if scheme.hasPrefix("http:") || scheme.hasPrefix("https:") || scheme.hasPrefix("mailto:") {
+                add([.link(text: label.isEmpty ? url : label, url: url)])
+            } else {
+                add(linkify(label, durationMs: durationMs))
+            }
+            last = m.range.location + m.range.length
+        }
+        add(linkify(plain(ns.substring(from: last)), durationMs: durationMs))
+        if case .text(let t)? = out.first { out[0] = .text(String(t.drop { $0.isWhitespace })) }
+        if case .text(let t)? = out.last { out[out.count - 1] = .text(String(t.reversed().drop { $0.isWhitespace }.reversed())) }
+        return out.filter { if case .text(let t) = $0 { return !t.isEmpty }; return true }
+    }
+
+    static let seekScheme = "homecast-seek"
+
+    /// The notes as styled text. Links open normally; a timestamp is a `homecast-seek://MS` link for `OpenURLAction`.
+    static func attributed(_ segments: [NoteSegment]) -> AttributedString {
+        var out = AttributedString()
+        for s in segments {
+            switch s {
+            case .text(let t): out += AttributedString(t)
+            case .link(let t, let u):
+                var a = AttributedString(t)
+                a.link = URL(string: u)
+                out += a
+            case .time(let t, let ms):
+                var a = AttributedString(t)
+                a.link = URL(string: "\(seekScheme)://\(ms)")
+                a.font = .system(size: 16, weight: .semibold).monospacedDigit()
+                out += a
+            }
+        }
+        return out
+    }
+
+    /// The milliseconds in a timestamp link made by `attributed`, or nil for any other URL.
+    static func seekTarget(_ url: URL) -> Int? {
+        url.scheme == seekScheme ? Int(url.host ?? "") : nil
+    }
+}
